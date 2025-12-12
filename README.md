@@ -1,4 +1,4 @@
-# 🐰 [Project Name / Game Title]
+# 🐰 Deep-Well
 
 > An atmospheric puzzle-platformer inspired by the masterpiece **Animal Well**.
 
@@ -27,4 +27,4 @@ I am constantly trying to improve this game. **Feel free to give me advice!**
 If you have suggestions on code optimization, level design, or mechanics, I would really appreciate it. Please feel free to open an issue or submit a pull request.
 
 ---
-*Made with ❤️ by [Your Name]*
+*Made with ❤️ by Issac*
