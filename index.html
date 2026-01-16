@@ -1139,6 +1139,22 @@ class GameRenderer {
         this.mapScale = 3.0;
         this.mapOffsetX = 0;
         this.mapOffsetY = 0;
+
+        // Calculate world bounds on init
+        this.worldBounds = this.calculateWorldBounds();
+    }
+
+    calculateWorldBounds() {
+        const keys = Object.keys(WORLD_LAYOUTS);
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        keys.forEach(k => {
+            const [x, y] = k.split(',').map(Number);
+            if(x < minX) minX = x;
+            if(x > maxX) maxX = x;
+            if(y < minY) minY = y;
+            if(y > maxY) maxY = y;
+        });
+        return { minX, maxX, minY, maxY };
     }
 
     handleMapInput(input, system) {
@@ -1147,7 +1163,11 @@ class GameRenderer {
             if(!this.tabHeld) {
                 if (system.abilities.minimap) {
                     this.showMap = !this.showMap;
-                    if(this.showMap) { this.mapScale = 3.0; this.mapOffsetX = 0; this.mapOffsetY = 0; }
+                    // Reset to center but keep scale
+                    if(this.showMap) { 
+                        this.mapOffsetX = 0; 
+                        this.mapOffsetY = 0; 
+                    }
                 } else {
                     this.ui.showSystemMessage("MAP MODULE NOT FOUND");
                 }
@@ -1158,13 +1178,53 @@ class GameRenderer {
         }
 
         if (this.showMap) {
-            if(input.keys["="] || input.keys["+"]) this.mapScale = Math.min(this.mapScale + 0.2, 5.0);
-            if(input.keys["-"] || input.keys["_"]) this.mapScale = Math.max(this.mapScale - 0.2, 1.0);
-            if(input.up) this.mapOffsetY += 15;
-            if(input.down) this.mapOffsetY -= 15;
-            if(input.left) this.mapOffsetX += 15;
-            if(input.right) this.mapOffsetX -= 15;
+            // Updated Sensitivity
+            const zoomSpeed = 0.05; // Smoother zoom (was 0.2)
+            const panSpeed = 3;     // Smoother pan (was 15)
+
+            if(input.keys["="] || input.keys["+"]) this.mapScale = Math.min(this.mapScale + zoomSpeed, 5.0);
+            if(input.keys["-"] || input.keys["_"]) this.mapScale = Math.max(this.mapScale - zoomSpeed, 0.5); // Allow more zoom out
+
+            if(input.up) this.mapOffsetY += panSpeed;
+            if(input.down) this.mapOffsetY -= panSpeed;
+            if(input.left) this.mapOffsetX += panSpeed;
+            if(input.right) this.mapOffsetX -= panSpeed;
+
+            this.clampMapCamera();
         }
+    }
+
+    clampMapCamera() {
+        // Clamp logic to ensure we don't pan too far away
+        const b = this.worldBounds;
+        const gridW = (b.maxX - b.minX + 1);
+        const gridH = (b.maxY - b.minY + 1);
+        const pixelSize = this.mapScale;
+        const roomPixW = 30 * pixelSize; 
+        const roomPixH = 18 * pixelSize;
+        const gap = 2 * pixelSize;
+        
+        const totalMapW = gridW * roomPixW + (gridW - 1) * gap;
+        const totalMapH = gridH * roomPixH + (gridH - 1) * gap;
+        
+        const viewportW = 400;
+        const viewportH = 240;
+
+        // If map is smaller than viewport, lock to center (offset 0)
+        // If larger, allow panning up to edge
+        
+        let maxOffX = 0;
+        let maxOffY = 0;
+
+        if (totalMapW > viewportW) {
+            maxOffX = (totalMapW - viewportW) / 2;
+        }
+        if (totalMapH > viewportH) {
+            maxOffY = (totalMapH - viewportH) / 2;
+        }
+
+        this.mapOffsetX = clamp(this.mapOffsetX, -maxOffX, maxOffX);
+        this.mapOffsetY = clamp(this.mapOffsetY, -maxOffY, maxOffY);
     }
 
     draw(game, accumulatedTime) {
@@ -1327,10 +1387,14 @@ class GameRenderer {
 
     drawMinimap(game) {
         const map = game.map;
+        const b = this.worldBounds;
+
         this.ctx.fillStyle = COLORS.mapBg;
         const mapW = 400; const mapH = 240;
         const mapX = (GAME_WIDTH - mapW) / 2;
         const mapY = (GAME_HEIGHT - mapH) / 2;
+        
+        // Draw background container
         this.ctx.fillRect(mapX, mapY, mapW, mapH);
         
         this.ctx.save();
@@ -1345,32 +1409,45 @@ class GameRenderer {
         this.ctx.textAlign = "left"; 
 
         const pixelSize = this.mapScale; 
-        const roomW = 30 * pixelSize; 
-        const roomH = 18 * pixelSize;
-        const gap = 4 * (this.mapScale / 1.5); 
+        const roomPixW = 30 * pixelSize; 
+        const roomPixH = 18 * pixelSize;
+        const gap = 2 * pixelSize; 
 
-        const startX = (GAME_WIDTH/2 - roomW/2) + this.mapOffsetX;
-        const startY = (GAME_HEIGHT/2 - roomH/2) + this.mapOffsetY;
+        // Layout Geometry
+        const gridW = (b.maxX - b.minX + 1);
+        const gridH = (b.maxY - b.minY + 1);
 
-        for(let y = -2; y <= 2; y++) {
-            for(let x = -2; x <= 2; x++) {
-                const currentRoomX = map.roomX + x;
-                const currentRoomY = map.roomY + y;
-                const key = `${currentRoomX},${currentRoomY}`;
-                const dx = startX + x * (roomW + gap);
-                const dy = startY + y * (roomH + gap);
+        const viewCX = mapX + mapW/2;
+        const viewCY = mapY + mapH/2;
+
+        // Iterate entire map bounds
+        for(let rY = b.minY; rY <= b.maxY; rY++) {
+            for(let rX = b.minX; rX <= b.maxX; rX++) {
+                const key = `${rX},${rY}`;
+                
+                // Calculate position relative to map center, then apply offset and view center
+                const distX = rX - (b.minX + (gridW - 1)/2); 
+                const distY = rY - (b.minY + (gridH - 1)/2);
+                
+                const dx = viewCX + this.mapOffsetX + distX * (roomPixW + gap) - (roomPixW/2);
+                const dy = viewCY + this.mapOffsetY + distY * (roomPixH + gap) - (roomPixH/2);
+
+                // Optimization: Skip drawing if offscreen
+                if (dx + roomPixW < mapX || dx > mapX + mapW || dy + roomPixH < mapY || dy > mapY + mapH) continue;
 
                 if (map.explored[key]) {
                     const layout = WORLD_LAYOUTS[key];
                     const exploredData = map.explored[key];
-                    const baseColor = (x === 0 && y === 0) ? '#222233' : '#111116';
+                    const baseColor = (rX === 0 && rY === 0) ? '#222233' : '#111116';
 
                     if (layout) {
+                        // Background for room
+                        this.ctx.fillStyle = baseColor;
+                        this.ctx.fillRect(dx, dy, roomPixW, roomPixH);
+
                         for (let r = 0; r < layout.length; r++) {     
                             for (let c = 0; c < layout[r].length; c++) { 
                                 if (exploredData[r][c]) {
-                                    this.ctx.fillStyle = baseColor;
-                                    this.ctx.fillRect(dx + c * pixelSize, dy + r * pixelSize, pixelSize, pixelSize);
                                     const tile = parseInt(layout[r][c]);
                                     if (tile !== 0) {
                                         const isFalseWall = tile === 6;
@@ -1388,10 +1465,10 @@ class GameRenderer {
                             }
                         }
                     }
-                    if (x === 0 && y === 0) {
+                    if (rX === map.roomX && rY === map.roomY) {
                         this.ctx.strokeStyle = COLORS.playerGlow;
                         this.ctx.lineWidth = 1;
-                        this.ctx.strokeRect(dx - 1, dy - 1, roomW + 2, roomH + 2);
+                        this.ctx.strokeRect(dx - 1, dy - 1, roomPixW + 2, roomPixH + 2);
                         const px = (game.player.x / TILE_SIZE) * pixelSize;
                         const py = (game.player.y / TILE_SIZE) * pixelSize;
                         this.ctx.fillStyle = '#fff';
