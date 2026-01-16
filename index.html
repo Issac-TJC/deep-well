@@ -1157,16 +1157,38 @@ class GameRenderer {
         return { minX, maxX, minY, maxY };
     }
 
-    handleMapInput(input, system) {
+    handleMapInput(game) {
+        const input = game.input;
+        const system = game.system;
+        const map = game.map;
+
         if (input.keys["Tab"]) {
             // Toggle Logic moved here from global scope
             if(!this.tabHeld) {
                 if (system.abilities.minimap) {
                     this.showMap = !this.showMap;
-                    // Reset to center but keep scale
+                    // Reset to center on player
                     if(this.showMap) { 
-                        this.mapOffsetX = 0; 
-                        this.mapOffsetY = 0; 
+                        const b = this.worldBounds;
+                        const gridW = (b.maxX - b.minX + 1);
+                        const gridH = (b.maxY - b.minY + 1);
+                        
+                        // Calculate geometric center of the grid
+                        const centerGridX = b.minX + (gridW - 1) / 2;
+                        const centerGridY = b.minY + (gridH - 1) / 2;
+
+                        const pixelSize = this.mapScale;
+                        const roomPixW = 30 * pixelSize; 
+                        const roomPixH = 18 * pixelSize;
+                        const gap = 2 * pixelSize;
+
+                        // Calculate offset to bring player's room to visual center
+                        // Offset = (GridCenter - PlayerPos) * StepSize
+                        this.mapOffsetX = (centerGridX - map.roomX) * (roomPixW + gap);
+                        this.mapOffsetY = (centerGridY - map.roomY) * (roomPixH + gap);
+
+                        // Ensure we respect bounds immediately
+                        this.clampMapCamera(); 
                     }
                 } else {
                     this.ui.showSystemMessage("MAP MODULE NOT FOUND");
@@ -1527,7 +1549,7 @@ class Game {
         this.accumulatedTime += deltaTime;
 
         // Input -> UI
-        this.renderer.handleMapInput(this.input, this.system);
+        this.renderer.handleMapInput(this);
 
         // Update Logic
         this.player.update(this, timeScale);
