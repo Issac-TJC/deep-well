@@ -1266,7 +1266,7 @@ class GameRenderer {
                         const pixelSize = this.mapScale;
                         const roomPixW = 30 * pixelSize; 
                         const roomPixH = 18 * pixelSize;
-                        const gap = 2 * pixelSize;
+                        const gap = 0 * pixelSize;
 
                         // Calculate offset to bring player's room to visual center
                         // Offset = (GridCenter - PlayerPos) * StepSize
@@ -1310,7 +1310,7 @@ class GameRenderer {
         const pixelSize = this.mapScale;
         const roomPixW = 30 * pixelSize; 
         const roomPixH = 18 * pixelSize;
-        const gap = 2 * pixelSize;
+        const gap = 0 * pixelSize;
         
         const totalMapW = gridW * roomPixW + (gridW - 1) * gap;
         const totalMapH = gridH * roomPixH + (gridH - 1) * gap;
@@ -1584,7 +1584,7 @@ class GameRenderer {
         const pixelSize = this.mapScale; 
         const roomPixW = 30 * pixelSize; 
         const roomPixH = 18 * pixelSize;
-        const gap = 2 * pixelSize; 
+        const gap = 0 * pixelSize; 
 
         // Layout Geometry
         const gridW = (b.maxX - b.minX + 1);
