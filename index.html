@@ -183,6 +183,12 @@
  * 1. CONFIGURATION & UTILS
  * ============================================================================
  */
+// TODO: Add sound effects for player actions (Jump, Land, Splash)
+// TODO: Implement a save system using localStorage to persist progress
+// TODO: Add simple enemy AI (e.g., patrolling bats or fish)
+// TODO: Create a main menu screen before the game starts
+// TODO: Add more variety to the tile graphics (variations of dirt/rock)
+
 const GAME_WIDTH = 480;
 const GAME_HEIGHT = 288;
 const TILE_SIZE = 16;
@@ -348,6 +354,26 @@ const WORLD_LAYOUTS = {
     "2,3": [
         "111111100000000111111111111111",
         "100000100000000100000000000001",
+        "10000xxx0000000100000000000001",
+        "111111110000000100000000000001",
+        "111110600000000100005005000001",
+        "101000110000000100000000000001",
+        "101001100000000100000000000001",
+        "100100100000000100000000000001",
+        "100110600000000100000000000001",
+        "100011110000000100000000000001",
+        "100001100000000100000000000001",
+        "000000100000000100000000000001",
+        "000000100000000100000000000001",
+        "100000100000000100000000000001",
+        "100600100000000100000000000001",
+        "100111100000000111100000000001",
+        "000011100000000111122211100001",
+        "111111100000000111111111111111"
+    ],
+    "2,4": [
+        "111111100000000111111111111111",
+        "100000100000000100000000000001",
         "100000100000000100000000000001",
         "100000100000000100000000000001",
         "100000100000000100005005000001",
@@ -365,7 +391,27 @@ const WORLD_LAYOUTS = {
         "000011100000000111122211100001",
         "111111100000000111111111111111"
     ],
-    "2,4": [
+    "2,5": [
+        "111111100000000111111111111111",
+        "100000100000000100000000000001",
+        "100000100000000100000000000001",
+        "100000100000000100000000000001",
+        "100000100000000100005005000001",
+        "100000100000000100000000000001",
+        "100000100000000100000000000001",
+        "100000100000000100000000000001",
+        "100000100000000100000000000001",
+        "100000100000000100000000000001",
+        "100000100000000100000000000001",
+        "000000100000000100000000000001",
+        "000000100000000100000000000001",
+        "100000100000000100000000000001",
+        "100600100000000100000000000001",
+        "100111100000000111100000000001",
+        "000011100000000111122211100001",
+        "111111100000000111111111111111"
+    ],
+    "2,6": [
         "111111100000000111111111111111",
         "100000100000000110000000000001",
         "100001000000000001000000000001",
@@ -390,14 +436,14 @@ const WORLD_LAYOUTS = {
         "111111110200011111111111101111",
         "111111100200000001110000100111",
         "111111000200000001110001100111",
-        "111110000200000000111101100101",
-        "111110000200000500011110000011",
-        "111100000200000000011010000011",
-        "111000000200000000011000000001",
-        "110000000200000000011000000000",
-        "100002222222200000011000000000",
-        "100002111111200000011000000000",
-        "110002000000200000111000000500",
+        "111110000200000000111101100111",
+        "111110000200000500011110000111",
+        "111100000200000000011010000111",
+        "111000000200000000011000000111",
+        "110000000200000000011000000011",
+        "100002222222200000011000000011",
+        "100002111111200000011000000011",
+        "110002000000200000111000000501",
         "111002000000200001110100000000",
         "111122222222222211110110000000",
         "111122222222222211110011110000",
@@ -579,6 +625,10 @@ class Particle {
             this.vy = -rand(0.5, 2.0);
             this.vx = rand(-0.5, 0.5);
             this.life = rand(0.5, 1.0);
+        } else if (type === 'rubble') {
+            this.vx = (Math.random() - 0.5) * 3;
+            this.vy = -rand(1, 3);
+            this.life = rand(0.5, 0.8);
         }
     }
 
@@ -597,6 +647,9 @@ class Particle {
         } else if (this.type === 'bubble') {
             this.life -= 0.02 * timeScale;
             this.vx *= Math.pow(0.95, timeScale);
+        } else if (this.type === 'rubble') {
+            this.life -= 0.02 * timeScale;
+            this.vy += 0.2 * timeScale; // Gravity for rubble
         }
     }
 
@@ -605,6 +658,7 @@ class Particle {
         else if (this.type === 'splash') ctx.fillStyle = `rgba(150, 200, 255, ${Math.max(0, this.life)})`;
         else if (this.type === 'spark') ctx.fillStyle = `rgba(255, 255, 150, ${Math.max(0, this.life)})`;
         else if (this.type === 'bubble') ctx.fillStyle = `rgba(200, 255, 255, ${Math.max(0, this.life * 0.6)})`;
+        else if (this.type === 'rubble') ctx.fillStyle = `rgba(120, 120, 140, ${Math.max(0, this.life)})`;
         else ctx.fillStyle = `rgba(255, 255, 200, ${Math.max(0, this.life)})`;
         ctx.fillRect(this.x, this.y, 1, 1);
     }
@@ -833,11 +887,11 @@ class Player {
         if(this.vy > maxSpeedY) this.vy = maxSpeedY; 
 
         this.x += this.vx * timeScale;
-        this.handleCollisions(map, 'x');
+        this.handleCollisions(game, map, 'x');
         
         this.y += this.vy * timeScale;
         this.grounded = false; 
-        this.handleCollisions(map, 'y');
+        this.handleCollisions(game, map, 'y');
 
         const squashK = 1 - Math.pow(0.9, timeScale);
         this.squash += (1 - this.squash) * squashK;
@@ -856,7 +910,8 @@ class Player {
 
         for (let y = startY; y <= endY; y++) {
             for (let x = startX; x <= endX; x++) {
-                if (map.getTile(x, y) === 99) {
+                // Modified Check: Only kill if spike exists and is NOT destroyed
+                if (map.getTile(x, y) === 99 && !map.isSpikeDestroyed(x, y)) {
                     game.triggerDeath();
                     return;
                 }
@@ -920,7 +975,7 @@ class Player {
         }
     }
 
-    handleCollisions(map, axis) {
+    handleCollisions(game, map, axis) {
         let startX = Math.floor((this.x - this.r) / TILE_SIZE);
         let endX = Math.floor((this.x + this.r) / TILE_SIZE);
         let startY = Math.floor((this.y - this.r) / TILE_SIZE);
@@ -940,7 +995,22 @@ class Player {
                             this.grounded = true;
                             if(this.vy > 2) { this.squash = 1.4; this.stretch = 0.6; }
                         }
-                        if (this.vy < 0) this.y = (y + 1) * TILE_SIZE + this.r + 0.01;
+                        if (this.vy < 0) {
+                            this.y = (y + 1) * TILE_SIZE + this.r + 0.01;
+                            
+                            // --- NEW: Spike Destruction Logic ---
+                            // If hitting a wall from below, bounce it
+                            map.triggerTileBounce(x, y);
+
+                            // Check if there is a spike directly above this wall
+                            // We use map.getTile to check existence, and isSpikeDestroyed to check state
+                            if (map.getTile(x, y - 1) === 99 && !map.isSpikeDestroyed(x, y - 1)) {
+                                map.destroySpike(x, y - 1);
+                                game.spawnParticles(x * TILE_SIZE + 8, (y - 1) * TILE_SIZE + 8, 8, 'rubble');
+                                game.spawnParticles(x * TILE_SIZE + 8, (y - 1) * TILE_SIZE + 8, 10, 'spark');
+                            }
+                            // ------------------------------------
+                        }
                         this.vy = 0;
                     }
                 }
@@ -978,6 +1048,10 @@ class Map {
         this.explored = {}; 
         this.visible = [];
         this.secretRegistry = {};
+
+        // --- NEW: Room-scoped destruction state ---
+        this.destroyedSpikes = new Set(); 
+        this.bouncingTiles = {}; // { "x,y": offset }
     }
 
     load(rx, ry) {
@@ -994,6 +1068,10 @@ class Map {
         if (!this.explored[key]) this.explored[key] = Array(this.rows).fill(0).map(() => Array(this.cols).fill(false));
         this.visible = Array(this.rows).fill(0).map(() => Array(this.cols).fill(false));
         if (!this.secretRegistry[key]) this.secretRegistry[key] = new Set();
+
+        // Reset temporary room state
+        this.destroyedSpikes.clear();
+        this.bouncingTiles = {};
 
         this.generateEntities(key);
         return true;
@@ -1030,6 +1108,20 @@ class Map {
         }
     }
 
+    // --- NEW: Destruction & Bounce Methods ---
+    isSpikeDestroyed(x, y) {
+        return this.destroyedSpikes.has(`${x},${y}`);
+    }
+
+    destroySpike(x, y) {
+        this.destroyedSpikes.add(`${x},${y}`);
+    }
+
+    triggerTileBounce(x, y) {
+        this.bouncingTiles[`${x},${y}`] = -4; // Bounce up 4 pixels
+    }
+    // ----------------------------------------
+
     updateEntities(game, timeScale) {
         this.grass.forEach(g => g.update(game.player, timeScale));
         this.flowers.forEach(f => f.update(game, timeScale));
@@ -1040,6 +1132,12 @@ class Map {
         this.chests.forEach(c => {
             if(c.abilityId && game.system.abilities[c.abilityId]) c.opened = true;
         });
+
+        // --- NEW: Update bounces ---
+        for (let key in this.bouncingTiles) {
+            this.bouncingTiles[key] *= Math.pow(0.8, timeScale); // Decay
+            if (Math.abs(this.bouncingTiles[key]) < 0.1) delete this.bouncingTiles[key];
+        }
     }
 
     checkFalseWalls(player) {
@@ -1089,8 +1187,13 @@ class Map {
                 markVisible(n.x, n.y);
                 
                 const tile = this.getTileValue(this.layout[n.y][n.x]);
-                if (tile === 1 || tile === 10 || tile === 6 || tile === 99) continue; // Spikes also block vis
-                if (n.x === 0 || n.x === this.cols - 1 || n.y === 0 || n.y === this.rows - 1) continue;
+                
+                // Visibility Logic Update: destroyed spikes do NOT block light
+                // If it is a spike (99) AND it is NOT destroyed, it blocks view.
+                if (tile === 99 && !this.isSpikeDestroyed(n.x, n.y)) continue;
+
+                if (tile === 1 || tile === 10 || tile === 6) continue;
+                
                 queue.push(n);
             }
         }
@@ -1400,9 +1503,16 @@ class GameRenderer {
                 let t = map.getTileValue(map.layout[y][x]);
                 let tx = x * TILE_SIZE;
                 let ty = y * TILE_SIZE;
-
+                
+                // --- NEW: Apply Bounce Offset ---
+                let bounceOff = map.bouncingTiles[`${x},${y}`] || 0;
+                
                 if (t === 1 || t === 10 || t === 6) {
                     this.ctx.save();
+                    
+                    // Apply translation for bounce animation
+                    if (bounceOff !== 0) this.ctx.translate(0, bounceOff);
+
                     if (t === 6 && map.isRevealed(x, y)) this.ctx.globalAlpha = 0.4;
 
                     this.ctx.fillStyle = COLORS.tileDark;
@@ -1442,6 +1552,10 @@ class GameRenderer {
                     for(let i=2; i<TILE_SIZE; i+=5) this.ctx.fillRect(tx + 4, ty + i, 8, 1);
                 }
                 else if (t === 99) { // Spike - Jagged Rocks
+                    
+                    // --- NEW: Check if destroyed ---
+                    if (map.isSpikeDestroyed(x, y)) continue;
+                    
                     this.ctx.fillStyle = COLORS.spike;
                     
                     // Generate pseudo-randomness based on position for stability
@@ -1754,7 +1868,7 @@ class Game {
         // Draw
         this.renderer.draw(this, this.accumulatedTime);
 
-        requestAnimationFrame((t) => this.loop(t));
+        requestAnimationFrame((t) => game.loop(t));
     }
 }
 
@@ -1829,4 +1943,4 @@ Object.keys(touchMap).forEach(id => {
 
 </script>
 </body>
-</html>
+</html> 
