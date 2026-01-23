@@ -264,7 +264,7 @@ const WORLD_LAYOUTS = {
         "122222222210000001000000000000",
         "122222222211110001000000000000",
         "111111111611110000000000000000",
-        "11111111121111000000x000300000",
+        "111111111211110000000000300000",
         "111111111211110000011111111111",
         "111111111200060000060000111111",
         "111111111211110000011110051111",
@@ -354,19 +354,39 @@ const WORLD_LAYOUTS = {
     "2,3": [
         "111111100000000111111111111111",
         "100000100000000100000000000001",
-        "10000xxx0000000100000000000001",
-        "111111110000000100000000000001",
-        "111110600000000100005005000001",
-        "101000110000000100000000000001",
+        "100001100000000101000000000001",
+        "000000100000000100000100010001",
+        "000000100000000100000000000011",
+        "10000xxx0000000100000000010001",
+        "111111110000000100000000000011",
+        "111110600000000110005005010001",
+        "101000111000000100000000000011",
         "101001100000000100000000000001",
-        "100100100000000100000000000001",
-        "100110600000000100000000000001",
+        "100100100000000111000011100001",
+        "100110600000000100000000000011",
         "100011110000000100000000000001",
-        "100001100000000100000000000001",
-        "000000100000000100000000000001",
-        "000000100000000100000000000001",
+        "100000100000000100000011111001",
+        "100600100000000100100000000001",
+        "100111100000000111100000000001",
+        "000011100000000111122211100001",
+        "111111100000000111111111111111"
+    ],
+    "1,3": [
+        "111111100000000111111111111111",
         "100000100000000100000000000001",
-        "100600100000000100000000000001",
+        "100001100000000101000000000001",
+        "000000100000000100000100010000",
+        "000000100000000100000000000010",
+        "10000xxx0000000100000000010001",
+        "111111110000000100000000000011",
+        "111110600000000110005005010001",
+        "101000111000000100000000000011",
+        "101001100000000100000000000001",
+        "100100100000000111000011100001",
+        "100110600000000100000000000011",
+        "100011110000000100000000000001",
+        "100000100000000100000011111001",
+        "100600100000000100100000000001",
         "100111100000000111100000000001",
         "000011100000000111122211100001",
         "111111100000000111111111111111"
@@ -1050,7 +1070,8 @@ class Map {
         this.secretRegistry = {};
 
         // --- NEW: Room-scoped destruction state ---
-        this.destroyedSpikes = new Set(); 
+        // CHANGED: Renamed to globalDestroyedSpikes and removed local set logic
+        this.globalDestroyedSpikes = new Set(); 
         this.bouncingTiles = {}; // { "x,y": offset }
     }
 
@@ -1070,7 +1091,8 @@ class Map {
         if (!this.secretRegistry[key]) this.secretRegistry[key] = new Set();
 
         // Reset temporary room state
-        this.destroyedSpikes.clear();
+        // CHANGED: We do NOT clear destroyed spikes anymore to make them permanent
+        // this.destroyedSpikes.clear(); 
         this.bouncingTiles = {};
 
         this.generateEntities(key);
@@ -1110,11 +1132,18 @@ class Map {
 
     // --- NEW: Destruction & Bounce Methods ---
     isSpikeDestroyed(x, y) {
-        return this.destroyedSpikes.has(`${x},${y}`);
+        // CHANGED: Check against global set using current room
+        return this.globalDestroyedSpikes.has(`${this.roomX},${this.roomY},${x},${y}`);
+    }
+
+    // New helper specifically for minimap or cross-room checks
+    isSpikeDestroyedAt(rx, ry, x, y) {
+        return this.globalDestroyedSpikes.has(`${rx},${ry},${x},${y}`);
     }
 
     destroySpike(x, y) {
-        this.destroyedSpikes.add(`${x},${y}`);
+        // CHANGED: Add to global set with room coordinates
+        this.globalDestroyedSpikes.add(`${this.roomX},${this.roomY},${x},${y}`);
     }
 
     triggerTileBounce(x, y) {
@@ -1745,7 +1774,11 @@ class GameRenderer {
                                         else if (tile === 3) this.ctx.fillStyle = COLORS.chestClosed;
                                         else if (tile === 4) this.ctx.fillStyle = COLORS.ladder;
                                         else if (tile === 5) this.ctx.fillStyle = COLORS.lightGlow;
-                                        else if (tile === 99) this.ctx.fillStyle = "#ff0000"; // Red for spike on map
+                                        else if (tile === 99) {
+                                            // CHANGED: Check if spike is destroyed globally before drawing red
+                                            if (map.isSpikeDestroyedAt(rX, rY, c, r)) continue; 
+                                            this.ctx.fillStyle = "#ff0000"; // Red for spike on map
+                                        }
                                         else continue;
                                         this.ctx.fillRect(dx + c * pixelSize, dy + r * pixelSize, pixelSize, pixelSize);
                                     }
