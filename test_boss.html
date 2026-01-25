@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Depth of the Well - BOSS</title>
-    <link rel="stylesheet" href="boss/boss.css">
+    <title>Depth of the Well - Boss Update</title>
     <style>
         body {
             margin: 0;
@@ -184,12 +183,6 @@
  * 1. CONFIGURATION & UTILS
  * ============================================================================
  */
-// TODO: Add sound effects for player actions (Jump, Land, Splash)
-// TODO: Implement a save system using localStorage to persist progress
-// TODO: Add simple enemy AI (e.g., patrolling bats or fish)
-// TODO: Create a main menu screen before the game starts
-// TODO: Add more variety to the tile graphics (variations of dirt/rock)
-
 const GAME_WIDTH = 480;
 const GAME_HEIGHT = 288;
 const TILE_SIZE = 16;
@@ -209,8 +202,8 @@ const COLORS = {
     waterSurface: 'rgba(50, 100, 255, 0.6)',
     playerCore: '#ffffff',
     playerGlow: '#aaffaa',
-    hat: '#ffcc00',          // New Hat Color
-    hatLight: '#ffeedd',     // New Hat Light Color
+    hat: '#ffcc00',          
+    hatLight: '#ffeedd',     
     mapBg: 'rgba(0, 0, 0, 0.85)',
     mapVisited: '#444466',
     mapCurrent: '#aaffaa',
@@ -221,8 +214,14 @@ const COLORS = {
     ladder: '#444455',
     lightBase: '#333344',
     lightGlow: '#ffeedd',
-    spike: '#666677', // Light rock color
-    spikeDark: '#444455' // Dark rock color
+    spike: '#666677',
+    spikeDark: '#444455',
+    // Boss Colors
+    bossOutline: '#442266',
+    bossGlow: '#8844cc',
+    bossEye: '#ccff00',
+    bossPupil: '#000000',
+    bossSmile: '#aa66ff'
 };
 
 function rand(min, max) { return Math.random() * (max - min) + min; }
@@ -234,227 +233,8 @@ function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
  * ============================================================================
  */
 const WORLD_LAYOUTS = {
-    "0,-1": [
-        "111111111111111111111111111111",
-        "100000000000000500000000000001",
-        "100000000000000000000000000001",
-        "110001100001100000011100000001",
-        "110000000000000000000000000001",
-        "111000000000001000011100000001",
-        "100000000000001100000000000001",
-        "100010000000000000000000000001",
-        "100011000000000011011000000001",
-        "100000000010000011011110000001",
-        "100000000010000000000000000001",
-        "100000000010000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000111111",
-        "100000000000000000000000006001",
-        "100000000000000000000011110001",
-        "100000000011110000011110000001",
-        "111111111411111111111111011111"
-    ],
+    // UPDATED ROOM (0,0) - Boss Arena
     "0,0": [
-        "111111111411111111111111011111",
-        "100000000400001111111111011111",
-        "100000000000000111111111011111",
-        "110001100001100001111111011111",
-        "110000000000000000111111611111",
-        "111000000000001000011111011101",
-        "100000000000001000011100511000",
-        "1005000000x0000010011000000000", 
-        "100011000010000011010000000000",
-        "122222222210000001000000000000",
-        "122222222211110001000000000000",
-        "111111111611110000000000000000",
-        "111111111211110000000000300000",
-        "111111111211110000011111111111",
-        "111111111200060000060000111111",
-        "111111111211110000011110051111",
-        "111111111211111111111110001111",
-        "111111111211111111111111101111"
-    ],
-    "1,0": [
-        "111111111111111111111111111111",
-        "100000000000000000000000000001",
-        "110111111111111111111111111111",
-        "101111111111111111111111111111",
-        "111000000111100000005005000001",
-        "110000000010000000000000000001",
-        "000000000000000000000000000001",
-        "000000000000000000000000000001",
-        "000000000000000000000000000001",
-        "000000000000000000000000000001",
-        "000000000000000000000000000001",
-        "000000000000000000000000000001",
-        "000000000000000000000000000001",
-        "111110000000000000000000000001",
-        "100600000000000000000000000001",
-        "100111100000000111100000000000",
-        "100011112211111111122211100000",
-        "111111111111111111111111111111"
-    ],
-    "2,0": [
-        "111111111111111111111111111111",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000005005000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "100000000000000000000000000001",
-        "000111100000000111100000000001",
-        "000011166666666111122211100001",
-        "111111100000000111111111111111"
-    ],
-    "2,1": [
-        "111111100000000111111111111111",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100005005000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "000000100000000100000000000001",
-        "000000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100600100000000100000000000001",
-        "100111100000000111100000000001",
-        "000011100000000111122211100001",
-        "111111100000000111111111111111"
-    ],
-    "2,2": [
-        "111111100000000111111111111111",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100005005000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "000000100000000100000000000001",
-        "000000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100600100000000100000000000001",
-        "100111100000000111100000000001",
-        "000011100000000111122211100001",
-        "111111100000000111111111111111"
-    ],
-    "2,3": [
-        "111111100000000111111111111111",
-        "100000100000000100000000000001",
-        "100001100000000101000000000001",
-        "000000100000000100000100010001",
-        "000000100000000100000000000011",
-        "10000xxx0000000100000000010001",
-        "111111110000000100000000000011",
-        "111110600000000110005005010001",
-        "101000111000000100000000000011",
-        "0x0001100000000100000000000001",
-        "111100100000000111000011100001",
-        "000110600000000100000000000011",
-        "111111110000000100000000000001",
-        "111100100000000100000011111001",
-        "100600100000000100100000000001",
-        "100111100000000111100000000001",
-        "000011100000000111122211100001",
-        "111111100000000111111111111111"
-    ],
-    "1,3": [
-        "111111100000000111111111111111",
-        "100000100000000100000000000001",
-        "100001100000000101000000000001",
-        "000000100000000100000100010000",
-        "000000100000000100000000000010",
-        "10000xxx0000000100000000010001",
-        "111111110000000100000000000011",
-        "111110600000000110005005010001",
-        "101000111000000100000000000011",
-        "101001100000000100000000000000",
-        "100100100000000111000011100001",
-        "100110600000000100000000000000",
-        "100011110000000100000003000011",
-        "100000100000000100000011111001",
-        "100600100000000100100000000001",
-        "100111100000000111100000000011",
-        "000011100000000111122211100001",
-        "111111100000000111111111111111"
-    ],
-    "2,4": [
-        "111111100000000111111111111111",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100005005000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "000000100000000100000000000001",
-        "000000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100600100000000100000000000001",
-        "100111100000000111100000000001",
-        "000011100000000111122211100001",
-        "111111100000000111111111111111"
-    ],
-    "2,5": [
-        "111111100000000111111111111111",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100005005000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100000100000000100000000000001",
-        "000000100000000100000000000001",
-        "000000100000000100000000000001",
-        "100000100000000100000000000001",
-        "100600100000000100000000000001",
-        "100111100000000111100000000001",
-        "000011100000000111122211100001",
-        "111111100000000111111111111111"
-    ],
-    "2,6": [
-        "111111100000000111111111111111",
-        "100000100000000110000000000001",
-        "100001000000000001000000000001",
-        "100010000000000000101111000001",
-        "100100000000000000015005100001",
-        "101000000000000000000000100001",
-        "110000000000000000000000100001",
-        "100000000000000000000000010001",
-        "100000000000000000000000010001",
-        "100000000000000100000000001001",
-        "100000000000000100000000000101",
-        "000000000000000100000000000101",
-        "000000000000000100000000000011",
-        "100000000000000100000000000001",
-        "100600000000000100000000000001",
-        "100111100000000111100000000001",
-        "100011111111111111122211100001",
-        "111111111111111111111111111111"
-    ],
-    "1,6": [
         "111111111111111111111111111111",
         "100000000000000000000000000001",
         "100000000000000000000000000001",
@@ -466,99 +246,26 @@ const WORLD_LAYOUTS = {
         "100000000000000000000000000001",
         "100000000000011100000000000001",
         "100000000000000000000000000001",
-        "100000011000000000000011000000",
-        "100000000000000000000000000000",
+        "100000011000000000000011000001",
+        "100000000000000000000000000001",
         "100000000000000000000000000001",
         "110000000000000000000000000011",
         "110000000000000000000000000011",
         "111111111111111111111111111111",
         "111111111111111111111111111111"
     ],
-    "0,1": [
-        "111111111211111111111111101111",
-        "111111110200011111111111101111",
-        "111111100200000001110000100111",
-        "111111000200000001110001100111",
-        "111110000200000000111101100111",
-        "111110000200000500011110000111",
-        "111100000200000000011010000111",
-        "111000000200000000011000000111",
-        "110000000200000000011000000011",
-        "100002222222200000011000000011",
-        "100002111111200000011000000011",
-        "110002000000200000111000000501",
-        "111002000000200001110100000000",
-        "111122222222222211110110000000",
-        "111122222222222211110011110000",
-        "111111111211111111110001111xx1",
-        "111111111211111111110000111111",
-        "111111111211111111111111111111"
-    ],
-    "1,1": [
-        "111111111111111111111111101111",
-        "111111111111111111111111101111",
-        "111111111111111111110000100111",
-        "111111111111111111110001100111",
-        "111111110000000000111101100101",
-        "111110000100000500011110000011",
-        "111100000200000000011010000011",
-        "111000000200000000011000000001",
-        "111000000222220000011000000000",
-        "111111111111120000011000000000",
-        "111111111111120000011000000000",
-        "110000000000020000111000000500",
-        "000000000000020001110100000000",
-        "000122222222222211110110000000",
-        "000122222222222211110011110000",
-        "1xx1111112111111111100011111xx",
-        "111500000211111111110000111111",
-        "111001111111111111111111111111"
-    ],
-    "1,2": [
-        "111001111111111111111111111111",
-        "100011111111111111111111111111",
-        "000111111111111111111111111111",
+    "1,3": [
         "111111111111111111111111111111",
-        "111110000200000000111101100101",
-        "111110000200000500011110000011",
-        "111100000200000000011010000011",
-        "111000000200000000011000000001",
-        "110000000222220000011000000000",
-        "100011111111120000011000000000",
-        "111111111111120000011000000000",
-        "110000000000020000111000000500",
-        "000000000000020001110100000000",
-        "000122222222222211110110000000",
-        "000122222222222211110011110000",
-        "1xx1111112111111111100011111xx",
-        "111500000211111111110000111111",
-        "111001111111111111111111111111"
-    ],
-    "0,2": [
-        "111111111211111111111111111111",
-        "100000000200000000000000000001",
-        "100000000200000000000000000006",
-        "100000000200000000000000000001",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
-        "122222211111122222222222222221",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
-        "122222222222222222222222222221",
+        "100000000000000000000000000001",
+        "100000000000000000000000000001",
+        "100000000000000000000000000001",
         "111111111111111111111111111111"
     ]
 };
 
 const ROOM_LOOT = {
     "0,0": "minimap",
-    "1,3": "minerHat" // New Ability
+    "1,3": "minerHat" 
 };
 
 /**
@@ -593,7 +300,6 @@ class InputHandler {
 
     isPressed(key) { return this.keys[key]; }
     
-    // Abstracted control checks
     get up() { return this.keys.ArrowUp || this.keys.w; }
     get down() { return this.keys.ArrowDown || this.keys.s; }
     get left() { return this.keys.ArrowLeft || this.keys.a; }
@@ -609,10 +315,7 @@ class UIManager {
     }
 
     showMessage(text, color = 'rgba(255, 255, 255, 0.7)', duration = 200) {
-        // Prevent flickering if message is same
         if (this.element.innerText === text && this.element.style.opacity > 0) return;
-        
-        // Don't overwrite system messages immediately
         if (this.element.innerText.includes("SYSTEM") && !text.includes("SYSTEM")) {
             if (this.element.style.opacity > 0) return;
         }
@@ -623,7 +326,6 @@ class UIManager {
 
         if (this.timeout) clearTimeout(this.timeout);
         
-        // Auto fade out if duration provided (mostly for non-looping messages)
         if (duration > 0 && duration < 5000) {
              this.timeout = setTimeout(() => {
                  this.element.style.opacity = 0;
@@ -693,7 +395,7 @@ class Particle {
             this.vx *= Math.pow(0.95, timeScale);
         } else if (this.type === 'rubble') {
             this.life -= 0.02 * timeScale;
-            this.vy += 0.2 * timeScale; // Gravity for rubble
+            this.vy += 0.2 * timeScale; 
         }
     }
 
@@ -825,7 +527,6 @@ class Flower {
 class Player {
     constructor(x, y) {
         this.x = x; this.y = y;
-        // Record initial spawn point
         this.respawnX = x;
         this.respawnY = y;
         
@@ -857,7 +558,6 @@ class Player {
         const centerTile = map.getTile(Math.floor(this.x / TILE_SIZE), Math.floor((this.y + this.r * 0.7) / TILE_SIZE));
         this.inWater = (centerTile === 2);
         
-        // Hazard Check (Spikes)
         this.checkHazards(game, map);
         if(game.isDead) return;
 
@@ -946,7 +646,6 @@ class Player {
     }
     
     checkHazards(game, map) {
-        // Simple bounding box check against spike tiles (ID 99)
         let startX = Math.floor((this.x - this.r) / TILE_SIZE);
         let endX = Math.floor((this.x + this.r) / TILE_SIZE);
         let startY = Math.floor((this.y - this.r) / TILE_SIZE);
@@ -954,7 +653,6 @@ class Player {
 
         for (let y = startY; y <= endY; y++) {
             for (let x = startX; x <= endX; x++) {
-                // Modified Check: Only kill if spike exists and is NOT destroyed
                 if (map.getTile(x, y) === 99 && !map.isSpikeDestroyed(x, y)) {
                     game.triggerDeath();
                     return;
@@ -987,15 +685,11 @@ class Player {
         this.wasInWater = currentInWater;
     }
 
-    // Helper for repetitive room checks
     attemptSwitch(game, xOff, yOff, newX, newY) {
         if(game.loadRoom(game.map.roomX + xOff, game.map.roomY + yOff)) {
             if(newX !== null) this.x = newX;
             if(newY !== null) this.y = newY;
-            
-            // --- NEW: Record new respawn point on room entry ---
             this.setRespawn();
-            
             game.spawnParticles(this.x, this.y, 10, 'dust');
             return true;
         }
@@ -1041,23 +735,13 @@ class Player {
                         }
                         if (this.vy < 0) {
                             this.y = (y + 1) * TILE_SIZE + this.r + 0.01;
-                            
-                            // --- NEW: Spike Destruction Logic ---
-                            // If hitting a wall from below, bounce it
                             map.triggerTileBounce(x, y);
-
-                            // Check if there is a spike directly above this wall
-                            // We use map.getTile to check existence, and isSpikeDestroyed to check state
                             if (map.getTile(x, y - 1) === 99 && !map.isSpikeDestroyed(x, y - 1)) {
-                                
-                                // NEW: Check for permanent destruction ability
                                 const hasMinerHat = game.system.abilities.minerHat;
                                 map.destroySpike(x, y - 1, hasMinerHat);
-                                
                                 game.spawnParticles(x * TILE_SIZE + 8, (y - 1) * TILE_SIZE + 8, 8, 'rubble');
                                 game.spawnParticles(x * TILE_SIZE + 8, (y - 1) * TILE_SIZE + 8, 10, 'spark');
                             }
-                            // ------------------------------------
                         }
                         this.vy = 0;
                     }
@@ -1071,19 +755,14 @@ class Player {
         ctx.translate(this.x, this.y);
         ctx.scale(this.squash, this.stretch);
         
-        // Player Body
         ctx.fillStyle = COLORS.playerCore;
         ctx.beginPath(); ctx.arc(0, 0, this.r, 0, Math.PI*2); ctx.fill();
 
-        // Miner Hat Rendering
-        // Access global game object via window if not passed, but here we assume game loop handles context
-        // We'll trust the game logic loop handles visual state, but we need access to system abilities
-        // HACK: Accessing via the global 'game' object which is defined at end of script
         if (typeof game !== 'undefined' && game.system.abilities.minerHat) {
             ctx.fillStyle = COLORS.hat;
-            ctx.fillRect(-3, -7, 6, 3); // Hat Base
+            ctx.fillRect(-3, -7, 6, 3);
             ctx.fillStyle = COLORS.hatLight;
-            ctx.fillRect(0, -7, 2, 2); // Light Bulb
+            ctx.fillRect(0, -7, 2, 2);
         }
 
         ctx.restore();
@@ -1098,7 +777,6 @@ class Map {
         this.rows = 0;
         this.cols = 0;
         
-        // Entities are now managed by Map for cleaner main loop
         this.decor = [];
         this.grass = [];
         this.flowers = [];
@@ -1111,11 +789,9 @@ class Map {
         this.visible = [];
         this.secretRegistry = {};
 
-        // --- NEW: Destruction State ---
-        this.globalDestroyedSpikes = new Set(); // Permanent
-        this.temporaryDestroyedSpikes = new Set(); // Recoverable (cleared on room load)
-        
-        this.bouncingTiles = {}; // { "x,y": offset }
+        this.globalDestroyedSpikes = new Set();
+        this.temporaryDestroyedSpikes = new Set();
+        this.bouncingTiles = {}; 
     }
 
     load(rx, ry) {
@@ -1133,17 +809,15 @@ class Map {
         this.visible = Array(this.rows).fill(0).map(() => Array(this.cols).fill(false));
         if (!this.secretRegistry[key]) this.secretRegistry[key] = new Set();
 
-        // Reset temporary room state
-        this.temporaryDestroyedSpikes.clear(); // Spikes recover when entering new room
+        this.temporaryDestroyedSpikes.clear();
         this.bouncingTiles = {};
 
         this.generateEntities(key);
         return true;
     }
 
-    // New parsing helper to handle characters
     getTileValue(val) {
-        if (val === 'x') return 99; // Spike
+        if (val === 'x') return 99; 
         return parseInt(val);
     }
 
@@ -1156,10 +830,8 @@ class Map {
 
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
-                // Use new helper
                 let t = this.getTileValue(this.layout[y][x]);
                 
-                // Decor
                 if ((t === 1 || t === 10) && this.getTile(x, y-1) === 0) {
                     const count = Math.floor(rand(2, 5)); 
                     for(let i=0; i<count; i++) this.grass.push(new Blade(x * TILE_SIZE + rand(2, 14), y * TILE_SIZE));
@@ -1172,16 +844,12 @@ class Map {
         }
     }
 
-    // --- NEW: Destruction & Bounce Methods ---
     isSpikeDestroyed(x, y) {
-        // Check both global (permanent) and temporary sets
         const key = `${this.roomX},${this.roomY},${x},${y}`;
         return this.globalDestroyedSpikes.has(key) || this.temporaryDestroyedSpikes.has(key);
     }
 
-    // New helper specifically for minimap
     isSpikeDestroyedAt(rx, ry, x, y) {
-        // Only check GLOBAL set. Recoverable spikes should still show on minimap unless permanently destroyed.
         return this.globalDestroyedSpikes.has(`${rx},${ry},${x},${y}`);
     }
 
@@ -1189,7 +857,6 @@ class Map {
         const key = `${this.roomX},${this.roomY},${x},${y}`;
         if (permanent) {
             this.globalDestroyedSpikes.add(key);
-            // If it was temporary, remove it to keep sets clean (optional)
             this.temporaryDestroyedSpikes.delete(key);
         } else {
             this.temporaryDestroyedSpikes.add(key);
@@ -1197,9 +864,8 @@ class Map {
     }
 
     triggerTileBounce(x, y) {
-        this.bouncingTiles[`${x},${y}`] = -4; // Bounce up 4 pixels
+        this.bouncingTiles[`${x},${y}`] = -4; 
     }
-    // ----------------------------------------
 
     updateEntities(game, timeScale) {
         this.grass.forEach(g => g.update(game.player, timeScale));
@@ -1207,14 +873,12 @@ class Map {
         this.chests.forEach(c => c.update(game, timeScale));
         this.lights.forEach(l => l.update(game.player, timeScale));
         
-        // Check if chests should be pre-opened based on abilities
         this.chests.forEach(c => {
             if(c.abilityId && game.system.abilities[c.abilityId]) c.opened = true;
         });
 
-        // --- NEW: Update bounces ---
         for (let key in this.bouncingTiles) {
-            this.bouncingTiles[key] *= Math.pow(0.8, timeScale); // Decay
+            this.bouncingTiles[key] *= Math.pow(0.8, timeScale); 
             if (Math.abs(this.bouncingTiles[key]) < 0.1) delete this.bouncingTiles[key];
         }
     }
@@ -1264,15 +928,9 @@ class Map {
                 if (n.x < 0 || n.x >= this.cols || n.y < 0 || n.y >= this.rows) continue;
                 if (this.visible[n.y][n.x]) continue;
                 markVisible(n.x, n.y);
-                
                 const tile = this.getTileValue(this.layout[n.y][n.x]);
-                
-                // Visibility Logic Update: destroyed spikes do NOT block light
-                // If it is a spike (99) AND it is NOT destroyed, it blocks view.
                 if (tile === 99 && !this.isSpikeDestroyed(n.x, n.y)) continue;
-
                 if (tile === 1 || tile === 10 || tile === 6) continue;
-                
                 queue.push(n);
             }
         }
@@ -1283,12 +941,10 @@ class Map {
             return this.getTileValue(this.layout[y][x]);
         }
         let nx = x, ny = y, rx = this.roomX, ry = this.roomY;
-
         if (x < 0) { rx--; nx = x + this.cols; } 
         else if (x >= this.cols) { rx++; nx = x - this.cols; }
         if (y < 0) { ry--; ny = y + this.rows; } 
         else if (y >= this.rows) { ry++; ny = y - this.rows; }
-
         const key = `${rx},${ry}`;
         const neighborLayout = WORLD_LAYOUTS[key];
         if (neighborLayout && ny >= 0 && ny < neighborLayout.length && nx >= 0 && nx < neighborLayout[0].length) {
@@ -1305,35 +961,371 @@ class Map {
 
 /**
  * ============================================================================
- * 5. MAP SCRIPT SYSTEM
+ * 5. MAP SCRIPT SYSTEM & BOSS LOGIC
  * ============================================================================
  */
 
 class MapScript {
-    // Interface required by the ScriptManager
-    init(game) {}   // Called once when entering the room
-    update(game) {} // Called every frame while in room
-
-    // boss animation
-    drawBackground(ctx, game) {}
-    drawForeground(ctx, game) {}
+    init(game) {}
+    update(game) {}
+    drawBackground(ctx, game) {} // New Hook
+    drawForeground(ctx, game) {} // New Hook
 }
 
-// boss room script
-</script>
-<script src="boss/boss.js"></script> 
-<script src="boss/boss_visuals.js"></script>
-<script>
+// --- BOSS FIGHT LOGIC START ---
 
-// Example Implementation: Tutorial Text & Triggers
-class StartRoomScript extends MapScript {
-    update(game) {
+class BossEye {
+    constructor(x, y) {
+        this.x = x * TILE_SIZE;
+        this.y = y * TILE_SIZE;
+        this.tileX = x;
+        this.tileY = y;
+        this.isOpen = false;
+        this.isDestroyed = false;
+        this.openTimer = 0;
+        this.w = TILE_SIZE;
+        this.h = TILE_SIZE;
+        this.blinkPhase = Math.random() * 10;
+    }
+
+    update(game, timeScale) {
+        if (this.isDestroyed) return;
+
+        // Visual blinking when closed
+        if (!this.isOpen) {
+            this.blinkPhase += 0.1 * timeScale;
+        }
+
+        // Check for player destruction collision (Hit from below)
+        // Mimic spike destruction logic but applied to this entity
         const p = game.player;
-        if (p.x < 100) game.ui.showMessage("Fall down to dive");
-        else if (p.x > 250) game.ui.showMessage("Jump right ->");
-        else if (p.y > 150) game.ui.showMessage("Hold Space in Water to CHARGE");
+        
+        // Simple AABB overlap for damage
+        if (this.isOpen) {
+            const px = p.x; const py = p.y; const pr = p.r;
+            // Hitbox for the eye spike
+            if (px + pr > this.x && px - pr < this.x + this.w &&
+                py + pr > this.y && py - pr < this.y + this.h) {
+                game.triggerDeath();
+                return;
+            }
+        }
+        
+        // Logic for destruction: Player must hit the block BELOW the eye with upward velocity
+        // We hook into the map's bounce logic. If map reports a bounce at tileX, tileY+1
+        const map = game.map;
+        const belowKey = `${this.tileX},${this.tileY + 1}`;
+        if (this.isOpen && map.bouncingTiles[belowKey] && map.bouncingTiles[belowKey] < -2) {
+             this.destroy(game);
+        }
+    }
+
+    destroy(game) {
+        this.isDestroyed = true;
+        this.isOpen = false;
+        game.spawnParticles(this.x + 8, this.y + 8, 15, 'rubble');
+        game.spawnParticles(this.x + 8, this.y + 8, 15, 'spark');
+    }
+
+    draw(ctx) {
+        if (this.isDestroyed) return;
+
+        const cx = this.x + 8;
+        const cy = this.y + 8;
+
+        // Statue Base
+        ctx.fillStyle = '#333344';
+        ctx.fillRect(this.x + 2, this.y + 2, 12, 14);
+        
+        if (this.isOpen) {
+            // Open Eye (Dangerous)
+            ctx.fillStyle = '#ff0044'; // Red/Pink glow
+            ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#ffffaa';
+            ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+            
+            // Spike visuals to indicate danger
+            ctx.strokeStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.moveTo(this.x + 2, this.y); ctx.lineTo(this.x + 8, this.y - 4); ctx.lineTo(this.x + 14, this.y);
+            ctx.stroke();
+        } else {
+            // Closed Eye
+            ctx.fillStyle = '#222233';
+            ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#555566';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); 
+            ctx.moveTo(cx - 4, cy); 
+            // Slight curve for closed eyelid
+            ctx.bezierCurveTo(cx - 2, cy + 2, cx + 2, cy + 2, cx + 4, cy);
+            ctx.stroke();
+        }
     }
 }
+
+class BossScript extends MapScript {
+    constructor() {
+        super();
+        this.state = 'INIT'; // INIT, INTRO, FIGHT, VICTORY, DEFEATED
+        this.timer = 0;
+        this.introAlpha = 0;
+        this.defeated = false; // Persistent flag
+        
+        // Fight Mechanics
+        this.catState = 'COUNTDOWN'; // COUNTDOWN, WATCHING
+        this.catTimer = 0;
+        this.destroyedEyes = 0;
+        this.eyes = [];
+        
+        this.lastPlayerX = 0;
+        this.lastPlayerY = 0;
+        this.moveTolerance = 0.5; // Pixels of movement allowed (jitter buffer)
+
+        // Difficulty Tuning
+        this.countdownDuration = 180; // Frames (~3s)
+        this.watchDuration = 120; // Frames (~2s)
+        this.eyeSpawnTimer = 0;
+    }
+
+    init(game) {
+        // Check if already defeated to prevent respawn
+        if (this.defeated) {
+            this.state = 'DEFEATED';
+            return;
+        }
+
+        // Reset boss state on room entry
+        this.state = 'INIT';
+        this.timer = 0;
+        this.introAlpha = 0;
+        this.destroyedEyes = 0;
+        this.catState = 'COUNTDOWN';
+        this.eyes = [
+            new BossEye(6, 4),
+            new BossEye(23, 4),
+            new BossEye(6, 11),
+            new BossEye(23, 11),
+            new BossEye(14, 9) // Center
+        ];
+    }
+
+    update(game) {
+        if (this.state === 'DEFEATED') return;
+
+        const timeScale = 1.0; 
+        
+        // --- 1. INTRO TRIGGER ---
+        if (this.state === 'INIT') {
+            // Room Lock (Force player inside bounds)
+            if (game.player.x < 16) game.player.x = 16;
+            if (game.player.x > GAME_WIDTH - 16) game.player.x = GAME_WIDTH - 16;
+
+            if (game.player.x > 80) { // Trigger point
+                this.state = 'INTRO';
+                this.timer = 0;
+                game.ui.showMessage("...", '#fff', 2000);
+            }
+        }
+
+        // --- 2. INTRO SEQUENCE ---
+        if (this.state === 'INTRO') {
+            this.timer++;
+            // Lock Player
+            game.player.vx = 0;
+            
+            // Fade in darkness
+            if (this.introAlpha < 0.8) this.introAlpha += 0.01;
+            
+            if (this.timer > 120 && this.timer < 300) {
+                 if (this.timer === 121) game.ui.showMessage("DON'T MOVE WHEN I WATCH", '#ff5555', 3000);
+            }
+
+            if (this.timer > 350) {
+                this.state = 'FIGHT';
+                this.timer = 0;
+                game.ui.showMessage("SURVIVE", '#ff0000', 1000);
+            }
+        }
+
+        // --- 3. BOSS FIGHT ---
+        if (this.state === 'FIGHT') {
+            // Room Lock
+            if (game.player.x < 16) game.player.x = 16;
+            if (game.player.x > GAME_WIDTH - 16) game.player.x = GAME_WIDTH - 16;
+
+            // Update Eyes
+            let activeEyes = 0;
+            this.eyes.forEach(eye => {
+                eye.update(game, timeScale);
+                if (!eye.isDestroyed) activeEyes++;
+                // Check if just destroyed to increment counter
+                if (eye.isDestroyed && !eye.wasDestroyedFrame) {
+                    this.destroyedEyes++;
+                    eye.wasDestroyedFrame = true;
+                    // Flash effect
+                    game.ui.showMessage(`${this.destroyedEyes}/5`, '#aaffaa', 500);
+                }
+            });
+
+            // Victory Check
+            if (this.destroyedEyes >= 5) {
+                this.state = 'VICTORY';
+                this.timer = 0;
+                return;
+            }
+
+            // Eye Spawning Logic
+            this.eyeSpawnTimer++;
+            if (this.eyeSpawnTimer > 200) {
+                const candidates = this.eyes.filter(e => !e.isDestroyed && !e.isOpen);
+                if (candidates.length > 0) {
+                    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+                    chosen.isOpen = true;
+                    // Auto close logic after some time?
+                    setTimeout(() => { if(!chosen.isDestroyed) chosen.isOpen = false; }, 4000);
+                }
+                this.eyeSpawnTimer = 0;
+            }
+
+            // RED LIGHT / GREEN LIGHT MECHANIC
+            this.catTimer++;
+            
+            // Difficulty scaling
+            const difficultyMod = this.destroyedEyes * 15;
+            const currentWatchTime = Math.min(this.watchDuration + difficultyMod, 250);
+            const currentCountTime = Math.max(this.countdownDuration - difficultyMod, 60);
+
+            if (this.catState === 'COUNTDOWN') {
+                if (this.catTimer > currentCountTime) {
+                    this.catState = 'WATCHING';
+                    this.catTimer = 0;
+                    this.lastPlayerX = game.player.x;
+                    this.lastPlayerY = game.player.y;
+                    game.spawnParticles(game.player.x, game.player.y - 20, 5, 'spark'); // Visual Warning
+                }
+            } else if (this.catState === 'WATCHING') {
+                // INSTANT DEATH CHECK
+                const dx = Math.abs(game.player.x - this.lastPlayerX);
+                const dy = Math.abs(game.player.y - this.lastPlayerY);
+                
+                // Allow very slight jitter, but kill on meaningful movement
+                if (dx > this.moveTolerance || dy > this.moveTolerance) {
+                    game.triggerDeath();
+                }
+
+                // Reset position for next frame check
+                this.lastPlayerX = game.player.x;
+                this.lastPlayerY = game.player.y;
+
+                if (this.catTimer > currentWatchTime) {
+                    this.catState = 'COUNTDOWN';
+                    this.catTimer = 0;
+                }
+            }
+        }
+
+        // --- 4. VICTORY ---
+        if (this.state === 'VICTORY') {
+            this.timer++;
+            if (this.introAlpha > 0) this.introAlpha -= 0.01;
+            if (this.timer === 50) game.ui.showMessage("THE GAZE LIFTS", '#aaffaa', 4000);
+            if (this.timer > 200) {
+                this.state = 'DEFEATED';
+                this.defeated = true; // Mark permanent defeat
+            }
+        }
+    }
+
+    drawBackground(ctx, game) {
+        if (this.state === 'INIT') return;
+
+        // Dark Overlay
+        ctx.fillStyle = `rgba(5, 5, 10, ${this.introAlpha})`;
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+        if (this.state === 'DEFEATED') {
+            // Just the smile remains
+            ctx.strokeStyle = COLORS.bossSmile;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(GAME_WIDTH/2, GAME_HEIGHT/2, 60, 0.2 * Math.PI, 0.8 * Math.PI);
+            ctx.stroke();
+            return;
+        }
+
+        // Draw Cat Silhouette
+        const cx = GAME_WIDTH / 2;
+        const cy = GAME_HEIGHT / 2 - 20;
+        const scale = 1.0 + Math.sin(Date.now() * 0.002) * 0.02;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
+
+        // Smile (Always Visible in Intro/Fight)
+        if (this.introAlpha > 0.2) {
+            ctx.strokeStyle = COLORS.bossSmile;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = COLORS.bossGlow;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(0, 0, 60, 0.2 * Math.PI, 0.8 * Math.PI);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        // Eyes Logic
+        if (this.state === 'FIGHT' || (this.state === 'INTRO' && this.timer > 200)) {
+            let eyeOpen = 0; // 0 = closed, 1 = open
+            
+            if (this.catState === 'WATCHING') {
+                eyeOpen = 1;
+            } else {
+                // Blinking effect during countdown
+                const blinkSpeed = 0.2 + (this.destroyedEyes * 0.1);
+                eyeOpen = Math.sin(Date.now() * 0.01 * blinkSpeed) > 0 ? 0 : 1;
+            }
+
+            const eyeW = 20; 
+            const eyeH = eyeOpen ? 20 : 2;
+            const pupilH = eyeOpen ? 15 : 0;
+
+            // Left Eye
+            this.drawCatEye(ctx, -40, -30, eyeW, eyeH, pupilH);
+            // Right Eye
+            this.drawCatEye(ctx, 40, -30, eyeW, eyeH, pupilH);
+        }
+
+        ctx.restore();
+    }
+
+    drawCatEye(ctx, x, y, w, h, pH) {
+        ctx.fillStyle = COLORS.bossEye;
+        ctx.shadowColor = COLORS.bossEye;
+        ctx.shadowBlur = 15;
+        
+        ctx.beginPath();
+        ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (pH > 0) {
+            ctx.fillStyle = COLORS.bossPupil;
+            ctx.beginPath();
+            ctx.ellipse(x, y, w * 0.2, pH, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    drawForeground(ctx, game) {
+        if (this.state === 'INIT') return;
+        // Draw Statues
+        this.eyes.forEach(eye => eye.draw(ctx));
+    }
+}
+// --- BOSS FIGHT LOGIC END ---
 
 class MapItemScript extends MapScript {
     update(game) {
@@ -1350,10 +1342,9 @@ class DeepWaterScript extends MapScript {
 
 // Registry linking coordinates to script instances
 const SCRIPT_REGISTRY = {
-    "0,0": new StartRoomScript(),
+    "0,0": new BossScript(), // UPDATED
     "1,0": new MapItemScript(),
-    "0,1": new DeepWaterScript(),
-    "1,6": new BossScript()
+    "0,1": new DeepWaterScript()
 };
 
 class ScriptManager {
@@ -1376,6 +1367,19 @@ class ScriptManager {
             this.currentScript.update(game);
         }
     }
+    
+    // New Hook Calls
+    drawBackground(ctx, game) {
+        if (this.currentScript && this.currentScript.drawBackground) {
+            this.currentScript.drawBackground(ctx, game);
+        }
+    }
+
+    drawForeground(ctx, game) {
+        if (this.currentScript && this.currentScript.drawForeground) {
+            this.currentScript.drawForeground(ctx, game);
+        }
+    }
 }
 
 /**
@@ -1388,7 +1392,7 @@ class SystemManager {
         this.ui = ui;
         this.abilities = { 
             minimap: false,
-            minerHat: false // New Ability
+            minerHat: false
         };
     }
 
@@ -1411,7 +1415,6 @@ class GameRenderer {
         this.ctx = canvas.getContext('2d', { alpha: false });
         this.ui = ui;
         
-        // Configuration
         this.canvas.width = GAME_WIDTH;
         this.canvas.height = GAME_HEIGHT;
         this.canvas.style.width = `${GAME_WIDTH * SCALE}px`;
@@ -1422,7 +1425,6 @@ class GameRenderer {
         this.mapOffsetX = 0;
         this.mapOffsetY = 0;
 
-        // Calculate world bounds on init
         this.worldBounds = this.calculateWorldBounds();
     }
 
@@ -1445,31 +1447,22 @@ class GameRenderer {
         const map = game.map;
 
         if (input.keys["Tab"]) {
-            // Toggle Logic moved here from global scope
             if(!this.tabHeld) {
                 if (system.abilities.minimap) {
                     this.showMap = !this.showMap;
-                    // Reset to center on player
                     if(this.showMap) { 
                         const b = this.worldBounds;
                         const gridW = (b.maxX - b.minX + 1);
                         const gridH = (b.maxY - b.minY + 1);
-                        
-                        // Calculate geometric center of the grid
                         const centerGridX = b.minX + (gridW - 1) / 2;
                         const centerGridY = b.minY + (gridH - 1) / 2;
-
                         const pixelSize = this.mapScale;
                         const roomPixW = 30 * pixelSize; 
                         const roomPixH = 18 * pixelSize;
                         const gap = 0 * pixelSize;
 
-                        // Calculate offset to bring player's room to visual center
-                        // Offset = (GridCenter - PlayerPos) * StepSize
                         this.mapOffsetX = (centerGridX - map.roomX) * (roomPixW + gap);
                         this.mapOffsetY = (centerGridY - map.roomY) * (roomPixH + gap);
-
-                        // Ensure we respect bounds immediately
                         this.clampMapCamera(); 
                     }
                 } else {
@@ -1482,12 +1475,11 @@ class GameRenderer {
         }
 
         if (this.showMap) {
-            // Updated Sensitivity
-            const zoomSpeed = 0.05; // Smoother zoom (was 0.2)
-            const panSpeed = 3;     // Smoother pan (was 15)
+            const zoomSpeed = 0.05; 
+            const panSpeed = 3;     
 
             if(input.keys["="] || input.keys["+"]) this.mapScale = Math.min(this.mapScale + zoomSpeed, 5.0);
-            if(input.keys["-"] || input.keys["_"]) this.mapScale = Math.max(this.mapScale - zoomSpeed, 0.5); // Allow more zoom out
+            if(input.keys["-"] || input.keys["_"]) this.mapScale = Math.max(this.mapScale - zoomSpeed, 0.5); 
 
             if(input.up) this.mapOffsetY += panSpeed;
             if(input.down) this.mapOffsetY -= panSpeed;
@@ -1499,7 +1491,6 @@ class GameRenderer {
     }
 
     clampMapCamera() {
-        // Clamp logic to ensure we don't pan too far away
         const b = this.worldBounds;
         const gridW = (b.maxX - b.minX + 1);
         const gridH = (b.maxY - b.minY + 1);
@@ -1510,22 +1501,13 @@ class GameRenderer {
         
         const totalMapW = gridW * roomPixW + (gridW - 1) * gap;
         const totalMapH = gridH * roomPixH + (gridH - 1) * gap;
-        
         const viewportW = 400;
         const viewportH = 240;
 
-        // If map is smaller than viewport, lock to center (offset 0)
-        // If larger, allow panning up to edge
-        
         let maxOffX = 0;
         let maxOffY = 0;
-
-        if (totalMapW > viewportW) {
-            maxOffX = (totalMapW - viewportW) / 2;
-        }
-        if (totalMapH > viewportH) {
-            maxOffY = (totalMapH - viewportH) / 2;
-        }
+        if (totalMapW > viewportW) maxOffX = (totalMapW - viewportW) / 2;
+        if (totalMapH > viewportH) maxOffY = (totalMapH - viewportH) / 2;
 
         this.mapOffsetX = clamp(this.mapOffsetX, -maxOffX, maxOffX);
         this.mapOffsetY = clamp(this.mapOffsetY, -maxOffY, maxOffY);
@@ -1536,29 +1518,23 @@ class GameRenderer {
         this.ctx.fillStyle = COLORS.bg;
         this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
+        // --- NEW HOOK: Script Background (Boss Cat) ---
+        game.scripts.drawBackground(this.ctx, game);
+
         this.drawDecor();
         this.drawMapTiles(game.map, accumulatedTime);
         game.player.draw(this.ctx);
+        
+        // --- NEW HOOK: Script Foreground (Statues) ---
+        game.scripts.drawForeground(this.ctx, game);
+
         this.drawParticles(game);
         this.drawLighting(game);
-
-        // draw scripts
-        if (game.scripts.currentScript && game.scripts.currentScript.drawForeground) {
-            game.scripts.currentScript.drawForeground(this.ctx, game);
-        }
-        // ---------------------------
         
-        // Handle Mosaic Effect for Death AND Recovery
         if (game.isDead || game.recoveryTimer > 0) {
             let mosaicFactor = 0;
-            
-            if (game.isDead) {
-                // Ramp up mosaic
-                mosaicFactor = Math.min(1, game.deathTimer / 1000);
-            } else {
-                // Ramp down mosaic (Recovery)
-                mosaicFactor = Math.max(0, game.recoveryTimer / 1000);
-            }
+            if (game.isDead) mosaicFactor = Math.min(1, game.deathTimer / 1000);
+            else mosaicFactor = Math.max(0, game.recoveryTimer / 1000);
 
             if (mosaicFactor > 0) {
                 const mosaicLevel = Math.max(1, Math.floor(mosaicFactor * 20));
@@ -1566,12 +1542,8 @@ class GameRenderer {
                 const h = this.canvas.height;
                 
                 this.ctx.imageSmoothingEnabled = false;
-                
-                // Downsample then Upsample for pixelation effect
                 this.ctx.drawImage(this.canvas, 0, 0, w, h, 0, 0, w / mosaicLevel, h / mosaicLevel);
                 this.ctx.drawImage(this.canvas, 0, 0, w / mosaicLevel, h / mosaicLevel, 0, 0, w, h);
-                
-                // Red tint fading with mosaic
                 this.ctx.fillStyle = `rgba(50, 0, 0, ${mosaicFactor * 0.5})`;
                 this.ctx.fillRect(0, 0, w, h);
             }
@@ -1594,7 +1566,6 @@ class GameRenderer {
     }
 
     drawMapTiles(map, accumulatedTime) {
-        // Draw Tiles
         for (let y = 0; y < map.rows; y++) {
             for (let x = 0; x < map.cols; x++) {
                 if (!map.visible || !map.visible[y][x]) continue;
@@ -1603,13 +1574,10 @@ class GameRenderer {
                 let tx = x * TILE_SIZE;
                 let ty = y * TILE_SIZE;
                 
-                // --- NEW: Apply Bounce Offset ---
                 let bounceOff = map.bouncingTiles[`${x},${y}`] || 0;
                 
                 if (t === 1 || t === 10 || t === 6) {
                     this.ctx.save();
-                    
-                    // Apply translation for bounce animation
                     if (bounceOff !== 0) this.ctx.translate(0, bounceOff);
 
                     if (t === 6 && map.isRevealed(x, y)) this.ctx.globalAlpha = 0.4;
@@ -1650,48 +1618,32 @@ class GameRenderer {
                     this.ctx.fillRect(tx + 10, ty, 2, TILE_SIZE);
                     for(let i=2; i<TILE_SIZE; i+=5) this.ctx.fillRect(tx + 4, ty + i, 8, 1);
                 }
-                else if (t === 99) { // Spike - Jagged Rocks
-                    
-                    // --- NEW: Check if destroyed (Recoverable or Permanent) ---
+                else if (t === 99) { 
                     if (map.isSpikeDestroyed(x, y)) continue;
-                    
                     this.ctx.fillStyle = COLORS.spike;
-                    
-                    // Generate pseudo-randomness based on position for stability
                     const seed = (x * 37 + y * 13) % 100;
-                    
-                    // Draw 3 sharp rocky shards per tile
                     this.ctx.beginPath();
-                    
-                    // Shard 1 (Main, tall)
                     this.ctx.moveTo(tx + 2, ty + TILE_SIZE);
                     this.ctx.lineTo(tx + 4 + (seed % 4), ty + 2 + (seed % 6)); 
                     this.ctx.lineTo(tx + 10, ty + TILE_SIZE);
-                    
-                    // Shard 2 (Right, smaller)
                     this.ctx.lineTo(tx + 14, ty + TILE_SIZE);
                     this.ctx.lineTo(tx + 12, ty + 6 + (seed % 4));
                     this.ctx.lineTo(tx + 8, ty + TILE_SIZE);
-                    
-                    // Shard 3 (Left, smaller, overlapping)
                     this.ctx.moveTo(tx, ty + TILE_SIZE);
                     this.ctx.lineTo(tx + 2, ty + 8 + (seed % 3));
                     this.ctx.lineTo(tx + 5, ty + TILE_SIZE);
-
                     this.ctx.fill();
 
-                    // Darker shading for depth
                     this.ctx.fillStyle = COLORS.spikeDark;
                     this.ctx.beginPath();
                     this.ctx.moveTo(tx + 4 + (seed % 4), ty + 2 + (seed % 6));
-                    this.ctx.lineTo(tx + 5 + (seed % 4), ty + TILE_SIZE); // Shadow line down
+                    this.ctx.lineTo(tx + 5 + (seed % 4), ty + TILE_SIZE); 
                     this.ctx.lineTo(tx + 3 + (seed % 4), ty + TILE_SIZE);
                     this.ctx.fill();
                 }
             }
         }
 
-        // Draw Water Surface
         this.ctx.fillStyle = COLORS.waterSurface;
         this.ctx.beginPath();
         map.waterNodes.forEach(node => {
@@ -1706,7 +1658,6 @@ class GameRenderer {
         });
         this.ctx.fill();
 
-        // Draw Entities
         const isVisible = (obj) => {
             const tx = Math.floor(obj.x / TILE_SIZE);
             const ty = Math.floor(obj.y / TILE_SIZE);
@@ -1729,20 +1680,18 @@ class GameRenderer {
     }
 
     drawLighting(game) {
-        if (game.isDead) return; // Skip complex lighting on death for performance/effect clarity
+        if (game.isDead) return;
 
         this.ctx.fillStyle = 'rgba(5, 5, 10, 0.3)';
         this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         this.ctx.globalCompositeOperation = 'lighter';
 
-        // Player
         let g = this.ctx.createRadialGradient(game.player.x, game.player.y, 2, game.player.x, game.player.y, 40);
         g.addColorStop(0, 'rgba(100, 255, 150, 0.3)');
         g.addColorStop(1, 'rgba(0, 0, 0, 0)');
         this.ctx.fillStyle = g;
         this.ctx.beginPath(); this.ctx.arc(game.player.x, game.player.y, 40, 0, Math.PI*2); this.ctx.fill();
 
-        // Wall Lights
         game.map.lights.forEach(l => {
             const tx = Math.floor(l.x / TILE_SIZE);
             const ty = Math.floor(l.y / TILE_SIZE);
@@ -1755,7 +1704,6 @@ class GameRenderer {
             }
         });
 
-        // Flowers
         game.map.flowers.forEach(f => {
             const tx = Math.floor(f.x / TILE_SIZE);
             const ty = Math.floor(f.y / TILE_SIZE);
@@ -1780,7 +1728,6 @@ class GameRenderer {
         const mapX = (GAME_WIDTH - mapW) / 2;
         const mapY = (GAME_HEIGHT - mapH) / 2;
         
-        // Draw background container
         this.ctx.fillRect(mapX, mapY, mapW, mapH);
         
         this.ctx.save();
@@ -1799,26 +1746,20 @@ class GameRenderer {
         const roomPixH = 18 * pixelSize;
         const gap = 0 * pixelSize; 
 
-        // Layout Geometry
         const gridW = (b.maxX - b.minX + 1);
         const gridH = (b.maxY - b.minY + 1);
 
         const viewCX = mapX + mapW/2;
         const viewCY = mapY + mapH/2;
 
-        // Iterate entire map bounds
         for(let rY = b.minY; rY <= b.maxY; rY++) {
             for(let rX = b.minX; rX <= b.maxX; rX++) {
                 const key = `${rX},${rY}`;
-                
-                // Calculate position relative to map center, then apply offset and view center
                 const distX = rX - (b.minX + (gridW - 1)/2); 
                 const distY = rY - (b.minY + (gridH - 1)/2);
-                
                 const dx = viewCX + this.mapOffsetX + distX * (roomPixW + gap) - (roomPixW/2);
                 const dy = viewCY + this.mapOffsetY + distY * (roomPixH + gap) - (roomPixH/2);
 
-                // Optimization: Skip drawing if offscreen
                 if (dx + roomPixW < mapX || dx > mapX + mapW || dy + roomPixH < mapY || dy > mapY + mapH) continue;
 
                 if (map.explored[key]) {
@@ -1827,7 +1768,6 @@ class GameRenderer {
                     const baseColor = (rX === 0 && rY === 0) ? '#222233' : '#111116';
 
                     if (layout) {
-                        // Background for room
                         this.ctx.fillStyle = baseColor;
                         this.ctx.fillRect(dx, dy, roomPixW, roomPixH);
 
@@ -1845,9 +1785,8 @@ class GameRenderer {
                                         else if (tile === 4) this.ctx.fillStyle = COLORS.ladder;
                                         else if (tile === 5) this.ctx.fillStyle = COLORS.lightGlow;
                                         else if (tile === 99) {
-                                            // CHANGED: Only removed from minimap if PERMANENTLY destroyed
                                             if (map.isSpikeDestroyedAt(rX, rY, c, r)) continue; 
-                                            this.ctx.fillStyle = "#ff0000"; // Red for spike on map
+                                            this.ctx.fillStyle = "#ff0000"; 
                                         }
                                         else continue;
                                         this.ctx.fillRect(dx + c * pixelSize, dy + r * pixelSize, pixelSize, pixelSize);
@@ -1886,23 +1825,21 @@ class Game {
         this.scripts = new ScriptManager();
         
         this.map = new Map();
-        this.player = new Player(55, 100); // Starting Position
+        this.player = new Player(55, 100); 
         this.particles = [];
         
         this.isDead = false;
         this.deathTimer = 0;
-        this.recoveryTimer = 0; // New Timer for fade-in effect
+        this.recoveryTimer = 0; 
 
         this.lastTime = 0;
         this.accumulatedTime = 0;
         
-        // Initial Room Load
         this.loadRoom(0, 0);
     }
 
     loadRoom(rx, ry) {
         if(this.map.load(rx, ry)) {
-            // Trigger Script Manager
             this.scripts.onRoomEnter(this, rx, ry);
             return true;
         }
@@ -1923,7 +1860,7 @@ class Game {
 
     respawn() {
         this.isDead = false;
-        this.recoveryTimer = 1000; // Start recovery effect (1 second)
+        this.recoveryTimer = 1000;
         this.player.x = this.player.respawnX;
         this.player.y = this.player.respawnY;
         this.player.vx = 0;
@@ -1939,26 +1876,23 @@ class Game {
         const timeScale = Math.min(deltaTime / (1000 / TARGET_FPS), 4.0);
         this.accumulatedTime += deltaTime;
 
-        // Input -> UI
         this.renderer.handleMapInput(this);
 
         if (this.isDead) {
             this.deathTimer += deltaTime;
-            if (this.deathTimer > 1000) { // Slightly faster death animation
+            if (this.deathTimer > 1000) { 
                 this.respawn();
             }
         } else {
-            // Handle Recovery Fade
             if (this.recoveryTimer > 0) {
                 this.recoveryTimer -= deltaTime;
                 if(this.recoveryTimer < 0) this.recoveryTimer = 0;
             }
 
-            // Update Logic
             this.player.update(this, timeScale);
             this.map.updateEntities(this, timeScale);
             this.map.updateVisibility(this.player);
-            this.scripts.update(this); // Run current room's script
+            this.scripts.update(this); 
             
             if(Math.random() < (0.1 * timeScale)) this.spawnParticles(rand(0, GAME_WIDTH), rand(0, GAME_HEIGHT), 1, 'dust');
         }
@@ -1968,23 +1902,16 @@ class Game {
             if (this.particles[i].life <= 0) this.particles.splice(i, 1);
         }
 
-        // Draw
         this.renderer.draw(this, this.accumulatedTime);
 
         requestAnimationFrame((t) => game.loop(t));
     }
 }
 
-// Start Game
 const game = new Game();
 requestAnimationFrame((t) => game.loop(t));
 
 
-/**
- * ============================================================================
- * 9. RESPONSIVE & MOBILE CONTROLS ADD-ON
- * ============================================================================
- */
 function handleResize() {
     const canvas = document.getElementById('gameCanvas');
     const aspectRatio = GAME_WIDTH / GAME_HEIGHT;
@@ -1992,7 +1919,6 @@ function handleResize() {
     
     let newWidth, newHeight;
     
-    // Scale to fit window while maintaining aspect ratio
     if (windowRatio < aspectRatio) {
         newWidth = window.innerWidth;
         newHeight = window.innerWidth / aspectRatio;
@@ -2006,9 +1932,8 @@ function handleResize() {
 }
 
 window.addEventListener('resize', handleResize);
-handleResize(); // Call once on load
+handleResize(); 
 
-// Mobile Touch Controls
 const touchMap = {
     'btn-up': 'ArrowUp',
     'btn-down': 'ArrowDown',
@@ -2023,11 +1948,10 @@ Object.keys(touchMap).forEach(id => {
     const key = touchMap[id];
     
     btn.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // Prevent scrolling/zooming
+        e.preventDefault(); 
         btn.classList.add('active');
         if(game && game.input) {
             if(key === 'Tab') {
-                // Toggle behavior for map needs a keyup/keydown simulation or direct logic
                  game.input.keys[key] = true;
             } else {
                 game.input.keys[key] = true;
