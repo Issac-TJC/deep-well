@@ -107,10 +107,13 @@ class BossScript extends MapScript {
         const b = this.boss;
         const p = game.player;
 
+        // 计时器本身之前就是正确的，因为它乘了 timeScale
         b.stateTimer += 0.016 * timeScale; 
         b.hitFlashTimer -= 0.1 * timeScale;
 
-        // 物理移动
+        // --- 修复点 1: 普通移动补上 timeScale ---
+        // 使用 timeScale 修正 Lerp，防止在高刷新率屏幕上移动过快
+        // 公式：Current + (Target - Current) * Factor * timeScale
         b.x += (b.targetX - b.x) * 0.05 * timeScale;
         b.y += (b.targetY - b.y) * 0.05 * timeScale;
 
@@ -128,7 +131,9 @@ class BossScript extends MapScript {
             case 'IDLE':
                 b.invulnerable = false;
                 b.targetX = p.x;
+                // 悬浮动画保持基于时间戳，不受帧率影响
                 b.targetY = 100 + Math.sin(Date.now() / 500) * 20;
+                
                 if (b.stateTimer > 3.0) {
                     this.switchState(Math.random() > 0.5 ? 'DASH' : 'CHASE');
                 }
@@ -142,13 +147,19 @@ class BossScript extends MapScript {
 
             case 'DASH':
                 if (b.stateTimer < 0.5) {
+                    // 预警 (后退)
                     b.targetX = p.x > b.x ? b.x - 20 : b.x + 20;
                 } else if (b.stateTimer < 0.6) {
+                    // 锁定位置
                     b.targetX = p.x;
                     b.targetY = p.y;
                 } else {
-                    b.x += (b.targetX - b.x) * 0.2;
-                    b.y += (b.targetY - b.y) * 0.2;
+                    // --- 修复点 2: 冲刺速度补上 timeScale ---
+                    // 之前漏了 timeScale，导致高刷屏速度加倍
+                    // 0.2 * timeScale 保证了在不同帧率下每帧移动的比例相对于时间是恒定的
+                    b.x += (b.targetX - b.x) * 0.2 * timeScale; 
+                    b.y += (b.targetY - b.y) * 0.2 * timeScale;
+                    
                     if (b.stateTimer > 1.5) this.switchState('STUNNED');
                 }
                 break;
@@ -160,18 +171,19 @@ class BossScript extends MapScript {
                 break;
 
             case 'DEAD':
-                b.targetY += 0.5;
+                // --- 修复点 3: 下落重力补上 timeScale ---
+                b.targetY += 0.5 * timeScale; 
+                
                 b.invulnerable = true;
                 if (Math.random() < 0.3) game.spawnParticles(b.x + (Math.random()-0.5)*30, b.y + (Math.random()-0.5)*30, 2, 'spark');
                 
                 if (b.stateTimer > 3.0) {
                     game.ui.showSystemMessage("THREAT NEUTRALIZED");
                     
-                    // --- 核心修改：记录状态 ---
-                    game.system.bossDefeated = true; // 永久标记 Boss 已死
-                    // game.system.enable("minerHat");  // 只解锁这一个能力，保持其他不变
+                    game.system.bossDefeated = true; 
+                    // game.system.enable("minerHat");
                     
-                    this.createExitLadder(game, true); // 生成出路
+                    this.createExitLadder(game, true); 
                     
                     this.cleanup();
                     this.boss = null; 
