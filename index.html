@@ -1371,9 +1371,9 @@ class ScriptManager {
         }
     }
 
-    update(game) {
+    update(game, timeScale) {
         if (this.currentScript && this.currentScript.update) {
-            this.currentScript.update(game);
+            this.currentScript.update(game, timeScale);
         }
     }
 }
@@ -1958,7 +1958,7 @@ class Game {
             this.player.update(this, timeScale);
             this.map.updateEntities(this, timeScale);
             this.map.updateVisibility(this.player);
-            this.scripts.update(this); // Run current room's script
+            this.scripts.update(this, timeScale); // Run current room's script
             
             if(Math.random() < (0.1 * timeScale)) this.spawnParticles(rand(0, GAME_WIDTH), rand(0, GAME_HEIGHT), 1, 'dust');
         }

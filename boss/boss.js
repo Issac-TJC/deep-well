@@ -88,14 +88,12 @@ class BossScript extends MapScript {
         }
     }
 
-    update(game) {
+    update(game, timeScale) {
         // 如果没有 Boss 实体（说明已击败并重进房间），则不执行任何逻辑
         if (!this.boss) return;
         
-        const dt = 1.0; 
-
-        this.updateLogic(game, dt);
-        this.updateProjectiles(game, dt);
+        this.updateLogic(game, timeScale);
+        this.updateProjectiles(game, timeScale);
         
         if (this.barFill && this.boss) {
             const pct = (this.boss.health / this.boss.maxHealth) * 100;
