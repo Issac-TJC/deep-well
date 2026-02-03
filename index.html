@@ -950,7 +950,7 @@ class BackgroundLayer {
         // Base config for global background elements
     }
 
-    draw(ctx, game) {
+    draw(ctx, game, timeScale) {
         // 1. Draw Global Decor (Pillars)
         // This replaces the old GameRenderer.drawDecor()
         ctx.fillStyle = '#0d0d1a';
@@ -968,7 +968,7 @@ class BackgroundLayer {
 
         // 2. Draw Scripted Backgrounds (e.g., The Owl)
         if (game.scripts.currentScript && game.scripts.currentScript.drawBackground) {
-            game.scripts.currentScript.drawBackground(ctx, game);
+            game.scripts.currentScript.drawBackground(ctx, game, timeScale);
         }
     }
 }
@@ -1103,7 +1103,7 @@ class GameRenderer {
         this.mapOffsetY = clamp(this.mapOffsetY, -maxOffY, maxOffY);
     }
 
-    draw(game, accumulatedTime) {
+    draw(game, accumulatedTime, timeScale) {
         // 1. CLEAR
         this.ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         this.ctx.fillStyle = COLORS.bg;
@@ -1129,7 +1129,7 @@ class GameRenderer {
 
         // 6. BOSS/FOREGROUND SCRIPT LAYER
         if (game.scripts.currentScript && game.scripts.currentScript.drawForeground) {
-            game.scripts.currentScript.drawForeground(this.ctx, game);
+            game.scripts.currentScript.drawForeground(this.ctx, game, timeScale);
         }
         
         // 7. POST-PROCESSING (Mosaic/Death)
@@ -1560,7 +1560,7 @@ class Game {
         }
 
         // Draw
-        this.renderer.draw(this, this.accumulatedTime);
+        this.renderer.draw(this, this.accumulatedTime, timeScale);
 
         requestAnimationFrame((t) => game.loop(t));
     }

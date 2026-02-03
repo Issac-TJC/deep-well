@@ -7,11 +7,13 @@
 class MapScript {
     // Interface required by the ScriptManager
     init(game) {}   // Called once when entering the room
-    update(game) {} // Called every frame while in room
+    // update(game) {} // Called every frame while in room
+
+    update(game, timeScale) {}
 
     // Layer Hooks
-    drawBackground(ctx, game) {} // NEW: Called by BackgroundLayer
-    drawForeground(ctx, game) {} // Called by GameRenderer
+    drawBackground(ctx, game, timeScale) {} // NEW: Called by BackgroundLayer
+    drawForeground(ctx, game, timeScale) {} // Called by GameRenderer
 }
 
 class ScriptManager {
