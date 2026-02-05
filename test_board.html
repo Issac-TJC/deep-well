@@ -107,12 +107,6 @@
  * 1. CONFIGURATION & UTILS
  * ============================================================================
  */
-// TODO: Add sound effects for player actions (Jump, Land, Splash)
-// TODO: Implement a save system using localStorage to persist progress
-// TODO: Add simple enemy AI (e.g., patrolling bats or fish)
-// TODO: Create a main menu screen before the game starts
-// TODO: Add more variety to the tile graphics (variations of dirt/rock)
-
 const GAME_WIDTH = 480;
 const GAME_HEIGHT = 288;
 const TILE_SIZE = 16;
@@ -132,8 +126,8 @@ const COLORS = {
     waterSurface: 'rgba(50, 100, 255, 0.6)',
     playerCore: '#ffffff',
     playerGlow: '#aaffaa',
-    hat: '#ffcc00',          // New Hat Color
-    hatLight: '#ffeedd',     // New Hat Light Color
+    hat: '#ffcc00',          
+    hatLight: '#ffeedd',     
     mapBg: 'rgba(0, 0, 0, 0.85)',
     mapVisited: '#444466',
     mapCurrent: '#aaffaa',
@@ -144,8 +138,12 @@ const COLORS = {
     ladder: '#444455',
     lightBase: '#333344',
     lightGlow: '#ffeedd',
-    spike: '#666677', // Light rock color
-    spikeDark: '#444455' // Dark rock color
+    spike: '#666677', 
+    spikeDark: '#444455',
+    // --- NEW: Retro Wood Platform Colors (Lighter, Retro) ---
+    woodDark: '#8d6e63',      // Lighter shadow for retro feel
+    woodLight: '#eecfa1',     // Retro light beige/wood
+    woodDetail: '#a1887f'     // Subtle texture
 };
 
 function rand(min, max) { return Math.random() * (max - min) + min; }
@@ -531,11 +529,11 @@ class Player {
         if(this.vy > maxSpeedY) this.vy = maxSpeedY; 
 
         this.x += this.vx * timeScale;
-        this.handleCollisions(game, map, 'x');
+        this.handleCollisions(game, map, 'x', timeScale);
         
         this.y += this.vy * timeScale;
         this.grounded = false; 
-        this.handleCollisions(game, map, 'y');
+        this.handleCollisions(game, map, 'y', timeScale);
 
         const squashK = 1 - Math.pow(0.9, timeScale);
         this.squash += (1 - this.squash) * squashK;
@@ -619,7 +617,7 @@ class Player {
         }
     }
 
-    handleCollisions(game, map, axis) {
+    handleCollisions(game, map, axis, timeScale) {
         let startX = Math.floor((this.x - this.r) / TILE_SIZE);
         let endX = Math.floor((this.x + this.r) / TILE_SIZE);
         let startY = Math.floor((this.y - this.r) / TILE_SIZE);
@@ -628,6 +626,25 @@ class Player {
         for (let y = startY; y <= endY; y++) {
             for (let x = startX; x <= endX; x++) {
                 let tile = map.getTile(x, y);
+
+                // --- WOODEN PLATFORM LOGIC (ID: 8) ---
+                if (tile === 8) {
+                    if (axis === 'y' && this.vy >= 0) {
+                        const tileTop = y * TILE_SIZE;
+                        const previousFeetY = (this.y - this.vy * timeScale) + this.r;
+                        const currentFeetY = this.y + this.r;
+
+                        if (previousFeetY <= tileTop + 0.1 && currentFeetY >= tileTop - 0.1) {
+                            this.y = tileTop - this.r - 0.01;
+                            this.grounded = true;
+                            this.vy = 0;
+                            if(this.vy > 2) { this.squash = 1.4; this.stretch = 0.6; }
+                        }
+                    }
+                    continue; // Skip standard wall logic for platforms
+                }
+                // ------------------------------------------
+
                 if (tile === 1 || tile === 10) { 
                     if (axis === 'x') {
                         if (this.vx > 0) this.x = x * TILE_SIZE - this.r - 0.01;
@@ -642,21 +659,12 @@ class Player {
                         if (this.vy < 0) {
                             this.y = (y + 1) * TILE_SIZE + this.r + 0.01;
                             
-                            // --- NEW: Spike Destruction Logic ---
-                            // If hitting a wall from below, bounce it
+                            // --- NEW: Improved Spike Destruction Logic ---
                             map.triggerTileBounce(x, y);
 
-                            // Check if there is a spike directly above this wall
-                            // We use map.getTile to check existence, and isSpikeDestroyed to check state
-                            if (map.getTile(x, y - 1) === 99 && !map.isSpikeDestroyed(x, y - 1)) {
-                                
-                                // NEW: Check for permanent destruction ability
-                                const hasMinerHat = game.system.abilities.minerHat;
-                                map.destroySpike(x, y - 1, hasMinerHat);
-                                
-                                game.spawnParticles(x * TILE_SIZE + 8, (y - 1) * TILE_SIZE + 8, 8, 'rubble');
-                                game.spawnParticles(x * TILE_SIZE + 8, (y - 1) * TILE_SIZE + 8, 10, 'spark');
-                            }
+                            // Process stack destruction (search up for spike)
+                            const hasMinerHat = game.system.abilities.minerHat;
+                            map.processSpikeHit(x, y, hasMinerHat, game);
                             // ------------------------------------
                         }
                         this.vy = 0;
@@ -676,9 +684,6 @@ class Player {
         ctx.beginPath(); ctx.arc(0, 0, this.r, 0, Math.PI*2); ctx.fill();
 
         // Miner Hat Rendering
-        // Access global game object via window if not passed, but here we assume game loop handles context
-        // We'll trust the game logic loop handles visual state, but we need access to system abilities
-        // HACK: Accessing via the global 'game' object which is defined at end of script
         if (typeof game !== 'undefined' && game.system.abilities.minerHat) {
             ctx.fillStyle = COLORS.hat;
             ctx.fillRect(-3, -7, 6, 3); // Hat Base
@@ -711,9 +716,13 @@ class Map {
         this.visible = [];
         this.secretRegistry = {};
 
-        // --- NEW: Destruction State ---
+        // --- Destruction State ---
         this.globalDestroyedSpikes = new Set(); // Permanent
         this.temporaryDestroyedSpikes = new Set(); // Recoverable (cleared on room load)
+        
+        // --- NEW: Active Destruction Tracking ---
+        this.activeSpikeKey = null; // Key of the spike currently being mined
+        this.activeHitCount = 0;    // How many times we've hit it consecutively
         
         this.bouncingTiles = {}; // { "x,y": offset }
     }
@@ -721,6 +730,10 @@ class Map {
     load(rx, ry) {
         const key = `${rx},${ry}`;
         if (!WORLD_LAYOUTS[key]) return false; 
+
+        // Reset active mining on room switch
+        this.activeSpikeKey = null;
+        this.activeHitCount = 0;
 
         this.roomX = rx;
         this.roomY = ry;
@@ -734,7 +747,7 @@ class Map {
         if (!this.secretRegistry[key]) this.secretRegistry[key] = new Set();
 
         // Reset temporary room state
-        this.temporaryDestroyedSpikes.clear(); // Spikes recover when entering new room
+        this.temporaryDestroyedSpikes.clear(); 
         this.bouncingTiles = {};
 
         this.generateEntities(key);
@@ -772,34 +785,126 @@ class Map {
         }
     }
 
-    // --- NEW: Destruction & Bounce Methods ---
-    isSpikeDestroyed(x, y) {
-        // Check both global (permanent) and temporary sets
-        const key = `${this.roomX},${this.roomY},${x},${y}`;
+    // --- NEW: Spike Logic (Stack Destruction with Combo Reset) ---
+    processSpikeHit(hitX, hitY, permanent, game) {
+        let cx = hitX;
+        let cy = hitY;
+        let crx = this.roomX;
+        let cry = this.roomY;
+        let brickCount = 1; // Start with the brick we just hit (bottom of stack)
+
+        let foundSpike = false;
+        let targetSpikeKey = null;
+
+        // Search UPWARDS (y decreasing)
+        // Max scan distance to prevent infinite loops
+        for(let i=0; i<20; i++) {
+            cy--;
+            
+            // Handle Room Transition Upwards
+            if (cy < 0) {
+                cry--;
+                cy = this.rows - 1; // Wrap to bottom of room above
+            }
+
+            // Access Raw Data for the room being checked
+            const roomKey = `${crx},${cry}`;
+            if (!WORLD_LAYOUTS[roomKey]) break; // No room above, stop search
+            
+            const layout = WORLD_LAYOUTS[roomKey];
+            if (cy >= layout.length || cx >= layout[0].length) break; // Bounds check safety
+
+            const tile = this.getTileValue(layout[cy][cx]);
+
+            // Tile '1' (or '10') are bricks. Accumulate count.
+            if (tile === 1 || tile === 10) {
+                brickCount++;
+            } else if (tile === 99) {
+                // Found a spike!
+                targetSpikeKey = `${crx},${cry},${cx},${cy}`;
+                foundSpike = true;
+                break; // Stop searching after finding the first spike
+            } else {
+                // Found something else (air, water, etc) -> Break connection
+                // Rule: "Accumulate until non-'1' or no room"
+                break; 
+            }
+        }
+
+        if (foundSpike && targetSpikeKey) {
+            // Check if we are continuing the same spike destruction or starting new
+            if (this.activeSpikeKey !== targetSpikeKey) {
+                // We switched targets (or started a new one) -> Reset
+                this.activeSpikeKey = targetSpikeKey;
+                this.activeHitCount = 0;
+            }
+
+            // Don't process if already destroyed
+            if (this.isSpikeDestroyedExplicit(crx, cry, cx, cy)) return;
+
+            this.activeHitCount++;
+
+            // FEEDBACK: Check if destroyed
+            // Rule: Hits needed == Number of bricks in the stack
+            if (this.activeHitCount >= brickCount) {
+                this.destroySpikeExplicit(crx, cry, cx, cy, permanent);
+                
+                // Visuals
+                game.spawnParticles(game.player.x, game.player.y - 20, 15, 'rubble');
+                // Spawn spark at the actual spike location if in current room
+                if (crx === this.roomX && cry === this.roomY) {
+                     game.spawnParticles(cx * TILE_SIZE + 8, cy * TILE_SIZE + 8, 10, 'spark');
+                }
+                
+                // Reset stats after destruction so we don't accidentally carry over to next hit
+                this.activeSpikeKey = null;
+                this.activeHitCount = 0;
+
+            } else {
+                // Feedback that we hit it but it resisted (Shake/Dust)
+                 game.spawnParticles(game.player.x, game.player.y - 20, 3, 'dust');
+            }
+        } else {
+            // We hit a brick, but the scan upward found NO spike (or hit air/water first).
+            // This counts as "hitting another brick" or "encountering non-brick".
+            // We must RESET the combo for any previous spike.
+            this.activeSpikeKey = null;
+            this.activeHitCount = 0;
+        }
+    }
+
+    isSpikeDestroyedExplicit(rx, ry, x, y) {
+        const key = `${rx},${ry},${x},${y}`;
         return this.globalDestroyedSpikes.has(key) || this.temporaryDestroyedSpikes.has(key);
     }
 
-    // New helper specifically for minimap
-    isSpikeDestroyedAt(rx, ry, x, y) {
-        // Only check GLOBAL set. Recoverable spikes should still show on minimap unless permanently destroyed.
-        return this.globalDestroyedSpikes.has(`${rx},${ry},${x},${y}`);
-    }
-
-    destroySpike(x, y, permanent = false) {
-        const key = `${this.roomX},${this.roomY},${x},${y}`;
+    destroySpikeExplicit(rx, ry, x, y, permanent) {
+        const key = `${rx},${ry},${x},${y}`;
         if (permanent) {
             this.globalDestroyedSpikes.add(key);
-            // If it was temporary, remove it to keep sets clean (optional)
             this.temporaryDestroyedSpikes.delete(key);
         } else {
             this.temporaryDestroyedSpikes.add(key);
         }
     }
+    // -------------------------------------------
+
+    isSpikeDestroyed(x, y) {
+        const key = `${this.roomX},${this.roomY},${x},${y}`;
+        return this.globalDestroyedSpikes.has(key) || this.temporaryDestroyedSpikes.has(key);
+    }
+
+    isSpikeDestroyedAt(rx, ry, x, y) {
+        return this.globalDestroyedSpikes.has(`${rx},${ry},${x},${y}`);
+    }
+
+    destroySpike(x, y, permanent = false) {
+        this.destroySpikeExplicit(this.roomX, this.roomY, x, y, permanent);
+    }
 
     triggerTileBounce(x, y) {
         this.bouncingTiles[`${x},${y}`] = -4; // Bounce up 4 pixels
     }
-    // ----------------------------------------
 
     updateEntities(game, timeScale) {
         this.grass.forEach(g => g.update(game.player, timeScale));
@@ -807,12 +912,10 @@ class Map {
         this.chests.forEach(c => c.update(game, timeScale));
         this.lights.forEach(l => l.update(game.player, timeScale));
         
-        // Check if chests should be pre-opened based on abilities
         this.chests.forEach(c => {
             if(c.abilityId && game.system.abilities[c.abilityId]) c.opened = true;
         });
 
-        // --- NEW: Update bounces ---
         for (let key in this.bouncingTiles) {
             this.bouncingTiles[key] *= Math.pow(0.8, timeScale); // Decay
             if (Math.abs(this.bouncingTiles[key]) < 0.1) delete this.bouncingTiles[key];
@@ -867,8 +970,6 @@ class Map {
                 
                 const tile = this.getTileValue(this.layout[n.y][n.x]);
                 
-                // Visibility Logic Update: destroyed spikes do NOT block light
-                // If it is a spike (99) AND it is NOT destroyed, it blocks view.
                 if (tile === 99 && !this.isSpikeDestroyed(n.x, n.y)) continue;
 
                 if (tile === 1 || tile === 10 || tile === 6) continue;
@@ -1241,6 +1342,43 @@ class GameRenderer {
                     this.ctx.fillRect(tx + 10, ty, 2, TILE_SIZE);
                     for(let i=2; i<TILE_SIZE; i+=5) this.ctx.fillRect(tx + 4, ty + i, 8, 1);
                 }
+                else if (t === 8) { // --- NEW: WOODEN PLATFORM (Refined Retro Style) ---
+                    const plankHeight = 4;
+                    const seed = (x * 37 + y * 13) % 100;
+
+                    // Main plank with new lighter retro wood color
+                    this.ctx.fillStyle = COLORS.woodLight;
+                    this.ctx.fillRect(tx, ty, TILE_SIZE, plankHeight);
+                    
+                    // Wood Grain Texture (Pixels) using woodDetail
+                    this.ctx.fillStyle = COLORS.woodDetail;
+                    if(seed % 3 === 0) this.ctx.fillRect(tx + 2, ty + 1, 3, 1);
+                    if(seed % 2 === 0) this.ctx.fillRect(tx + 8, ty + 2, 4, 1);
+                    if(seed % 4 === 0) this.ctx.fillRect(tx + 13, ty + 1, 2, 1);
+
+                    // Check neighbors
+                    const leftT = map.getTile(x - 1, y);
+                    const rightT = map.getTile(x + 1, y);
+
+                    // Supports - New Style: Thin Diagonal Struts
+                    this.ctx.fillStyle = COLORS.woodDark;
+                    
+                    if (leftT === 1 || leftT === 10) {
+                        // Left Support: Simple diagonal pixels (pixel art line)
+                        this.ctx.fillRect(tx, ty + plankHeight, 1, 1);
+                        this.ctx.fillRect(tx + 1, ty + plankHeight + 1, 1, 1);
+                        this.ctx.fillRect(tx + 2, ty + plankHeight + 2, 1, 1);
+                        this.ctx.fillRect(tx + 3, ty + plankHeight + 3, 1, 1);
+                    }
+                    
+                    if (rightT === 1 || rightT === 10) {
+                        // Right Support: Mirrored diagonal pixels
+                        this.ctx.fillRect(tx + 15, ty + plankHeight, 1, 1);
+                        this.ctx.fillRect(tx + 14, ty + plankHeight + 1, 1, 1);
+                        this.ctx.fillRect(tx + 13, ty + plankHeight + 2, 1, 1);
+                        this.ctx.fillRect(tx + 12, ty + plankHeight + 3, 1, 1);
+                    }
+                }
                 else if (t === 99) { // Spike - Jagged Rocks
                     
                     // --- NEW: Check if destroyed (Recoverable or Permanent) ---
@@ -1435,6 +1573,7 @@ class GameRenderer {
                                         else if (tile === 3) this.ctx.fillStyle = COLORS.chestClosed;
                                         else if (tile === 4) this.ctx.fillStyle = COLORS.ladder;
                                         else if (tile === 5) this.ctx.fillStyle = COLORS.lightGlow;
+                                        else if (tile === 8) this.ctx.fillStyle = COLORS.woodDark; // Minimap color for wood
                                         else if (tile === 99) {
                                             // CHANGED: Only removed from minimap if PERMANENTLY destroyed
                                             if (map.isSpikeDestroyedAt(rX, rY, c, r)) continue; 

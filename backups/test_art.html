@@ -925,7 +925,7 @@ class SystemManager {
     constructor(ui) {
         this.ui = ui;
         this.abilities = { 
-            minimap: false,
+            minimap: true,
             minerHat: false // New Ability
         };
     }
@@ -950,7 +950,7 @@ class BackgroundLayer {
         // Base config for global background elements
     }
 
-    draw(ctx, game) {
+    draw(ctx, game, timeScale) {
         // 1. Draw Global Decor (Pillars)
         // This replaces the old GameRenderer.drawDecor()
         ctx.fillStyle = '#0d0d1a';
@@ -968,7 +968,7 @@ class BackgroundLayer {
 
         // 2. Draw Scripted Backgrounds (e.g., The Owl)
         if (game.scripts.currentScript && game.scripts.currentScript.drawBackground) {
-            game.scripts.currentScript.drawBackground(ctx, game);
+            game.scripts.currentScript.drawBackground(ctx, game, timeScale);
         }
     }
 }
@@ -1103,7 +1103,7 @@ class GameRenderer {
         this.mapOffsetY = clamp(this.mapOffsetY, -maxOffY, maxOffY);
     }
 
-    draw(game, accumulatedTime) {
+    draw(game, accumulatedTime, timeScale) {
         // 1. CLEAR
         this.ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         this.ctx.fillStyle = COLORS.bg;
@@ -1129,7 +1129,7 @@ class GameRenderer {
 
         // 6. BOSS/FOREGROUND SCRIPT LAYER
         if (game.scripts.currentScript && game.scripts.currentScript.drawForeground) {
-            game.scripts.currentScript.drawForeground(this.ctx, game);
+            game.scripts.currentScript.drawForeground(this.ctx, game, timeScale);
         }
         
         // 7. POST-PROCESSING (Mosaic/Death)
@@ -1477,7 +1477,7 @@ class Game {
         this.scripts = new ScriptManager();
         
         this.map = new Map();
-        this.player = new Player(55, 100); // Starting Position
+        this.player = new Player(900, 890); // Starting Position
         this.particles = [];
         
         this.isDead = false;
@@ -1519,6 +1519,7 @@ class Game {
         this.player.y = this.player.respawnY;
         this.player.vx = 0;
         this.player.vy = 0;
+        this.map.temporaryDestroyedSpikes.clear(); // Reset temporary spikes on death
         this.spawnParticles(this.player.x, this.player.y, 10, 'dust');
     }
 
@@ -1560,7 +1561,7 @@ class Game {
         }
 
         // Draw
-        this.renderer.draw(this, this.accumulatedTime);
+        this.renderer.draw(this, this.accumulatedTime, timeScale);
 
         requestAnimationFrame((t) => game.loop(t));
     }

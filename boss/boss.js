@@ -274,10 +274,10 @@ class BossScript extends MapScript {
         }
     }
 
-    drawForeground(ctx, game) {
+    drawForeground(ctx, game, timeScale) {
         if (this.boss) {
-            this.renderer.draw(ctx, this.boss, 1.0);
-            this.renderer.drawProjectiles(ctx, this.projectiles);
+            this.renderer.draw(ctx, this.boss, timeScale);
+            this.renderer.drawProjectiles(ctx, this.projectiles, timeScale);
         }
     }
 }
