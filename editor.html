@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BOSS Engine - World Builder</title>
+    <style>
+        :root {
+            --bg: #111;
+            --panel: #1a1a1a;
+            --border: #333;
+            --accent: #4a90e2;
+            --text: #ddd;
+            --success: #44aa44;
+            --danger: #cc4444;
+            --highlight: #ffd700;
+        }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: monospace; height: 100vh; display: flex; overflow: hidden; }
+        
+        /* Layout */
+        #sidebar { width: 320px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 10px; box-sizing: border-box; z-index: 10; }
+        #main { flex: 1; position: relative; display: flex; flex-direction: column; }
+        #toolbar { height: 40px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 10px; gap: 10px; justify-content: space-between; z-index: 10; }
+        #viewport { flex: 1; background: #000; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        
+        /* UI Components */
+        h2, h3 { margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 5px; color: #fff; }
+        .group { background: rgba(0,0,0,0.2); border: 1px solid var(--border); padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+        .row { display: flex; gap: 5px; margin-bottom: 5px; align-items: center; }
+        button { background: #333; border: 1px solid #555; color: white; padding: 5px 10px; cursor: pointer; font-family: inherit; font-size: 11px; flex: 1; transition: background 0.2s; }
+        button:hover { background: #444; }
+        button:active { transform: translateY(1px); }
+        button.active { background: var(--accent); border-color: #6baef2; }
+        button.success { background: var(--success); border-color: #55cc55; }
+        button.danger { background: var(--danger); border-color: #ff6666; }
+        button.secondary { background: #444; border-color: #666; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        input, select { background: #222; border: 1px solid #444; color: white; padding: 4px; font-family: inherit; width: 100%; box-sizing: border-box; }
+        
+        /* Canvas Areas */
+        canvas { image-rendering: pixelated; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+        
+        /* World View Specifics */
+        #world-canvas { cursor: grab; background-color: #050505; }
+        #world-canvas:active { cursor: grabbing; }
+
+        /* Room Canvas - Scaled Up */
+        #room-canvas {
+            width: auto;
+            height: auto;
+            max-width: 95%;
+            max-height: 95%;
+            aspect-ratio: 480/288;
+            image-rendering: pixelated; 
+            /* Subtle grid background for Air */
+            background-image: 
+                linear-gradient(#1a1a1a 1px, transparent 1px),
+                linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
+            background-size: 3.33% 5.55%; /* Approx for 30x18 grid */
+            background-color: #0a0a0a;
+        }
+        
+        /* Minimap Overlay */
+        #minimap-overlay {
+            position: absolute;
+            top: 20px;
+            right: 20px; /* Moved to right */
+            background: rgba(0, 0, 0, 0.4); /* Semi-transparent */
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px;
+            z-index: 100;
+            display: none;
+            backdrop-filter: blur(2px);
+            /* Important: Click-through */
+            pointer-events: none;
+            border-radius: 8px;
+        }
+        #minimap-canvas { display: block; image-rendering: pixelated; opacity: 0.85; }
+
+        /* Palette Grid */
+        #palette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; max-height: 200px; overflow-y: auto; }
+        .p-btn { aspect-ratio: 1; border: 1px solid #444; cursor: pointer; position: relative; font-size: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; font-weight: bold; color: rgba(255,255,255,0.9); text-shadow: 0 0 2px black; background: #222; }
+        .p-btn.active { border-color: white; box-shadow: 0 0 0 2px var(--accent); z-index: 2; color: white; text-shadow: 0 1px 2px black; }
+        .p-btn img { width: 100%; height: 100%; image-rendering: pixelated; }
+
+        /* Pixel Editor */
+        #pixel-editor-panel {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 200;
+            display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+        }
+        .color-swatch { width: 24px; height: 24px; border: 1px solid #555; display: inline-block; cursor: pointer; }
+        .color-swatch.active { border: 2px solid white; transform: scale(1.1); }
+        
+        /* Modal for JSON */
+        #json-modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 300; display: none;
+            padding: 40px; box-sizing: border-box;
+        }
+        textarea { width: 100%; height: 80%; background: #111; color: #0f0; border: 1px solid #333; font-family: monospace; padding: 10px; font-size: 12px; }
+
+        .helper-text { font-size: 10px; color: #888; margin-top: 5px; text-align: center; }
+        
+        /* Status message */
+        #status-message { font-size: 11px; color: #aaa; margin-left: auto; }
+
+        /* Save Dialog */
+        #save-modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 400; display: none;
+            align-items: center; justify-content: center;
+        }
+        .modal-box { background: #222; border: 1px solid #555; padding: 20px; width: 300px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+<!-- HIDDEN FILE INPUT -->
+<input type="file" id="file-loader" accept=".js,.json,.txt" style="display: none;" onchange="dataManager.onFileSelected(this)">
+
+<!-- SAVE MODAL -->
+<div id="save-modal">
+    <div class="modal-box">
+        <h3>Save Options</h3>
+        <p style="font-size: 11px; color: #aaa; margin-bottom: 20px;">Choose how you want to save the map data.</p>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button id="btn-save-overwrite" class="success" onclick="dataManager.saveOverwrite()">OVERWRITE SOURCE</button>
+            <button id="btn-save-new" class="active" onclick="dataManager.saveAsNew()">SAVE AS NEW FILE</button>
+            <button class="secondary" onclick="document.getElementById('save-modal').style.display='none'">CANCEL</button>
+        </div>
+    </div>
+</div>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+    <h2>BOSS Builder</h2>
+
+    <!-- Mode Switcher -->
+    <div class="row">
+        <button id="btn-mode-world" class="active" onclick="app.setMode('world')">WORLD MAP</button>
+        <button id="btn-mode-room" onclick="app.editCurrentRoom()">EDIT SELECTED</button>
+    </div>
+    
+    <div class="helper-text" style="margin-bottom: 10px;">
+        Click to Select. Double-click to Edit.<br>Drag to Pan. Scroll to Zoom.
+    </div>
+
+    <!-- Room Actions -->
+    <div class="group">
+        <h3>Room Actions</h3>
+        <div class="row">
+            <button onclick="app.copyRoom()" title="Ctrl+C">Copy</button>
+            <button onclick="app.cutRoom()" title="Ctrl+X">Cut</button>
+            <button onclick="app.pasteRoom()" title="Ctrl+V">Paste</button>
+        </div>
+        <div class="row">
+            <button class="danger" onclick="app.deleteRoom()" title="Delete/Backspace">Delete Room</button>
+        </div>
+    </div>
+
+    <!-- Tools -->
+    <div class="group">
+        <h3>Tools</h3>
+        <div class="row">
+            <button id="tool-pencil" class="active" onclick="app.setTool('pencil')">Pencil (P)</button>
+            <button id="tool-bucket" onclick="app.setTool('bucket')">Fill (B)</button>
+        </div>
+        <div class="row">
+            <button onclick="app.undo()" title="Ctrl+Z">Undo</button>
+            <button onclick="app.redo()" title="Ctrl+Y">Redo</button>
+        </div>
+        <div class="row">
+            <button class="danger" onclick="app.clearRoomContent()">Clear Tiles</button>
+        </div>
+    </div>
+
+    <!-- Palette -->
+    <div class="group" style="flex: 1; display: flex; flex-direction: column;">
+        <h3>Tile Palette</h3>
+        <div id="palette">
+            <!-- Populated by JS -->
+        </div>
+        <button onclick="pixelEditor.open()" style="margin-top: 10px; background: #553377;">+ DRAW NEW TILE</button>
+    </div>
+
+    <!-- Data -->
+    <div class="group">
+        <h3>File / Data</h3>
+        <div class="row">
+            <button class="active" onclick="dataManager.openSmart()" title="Auto-detects browser capabilities">OPEN FILE</button>
+            <button class="success" onclick="dataManager.saveWithUI()">SAVE FILE</button>
+        </div>
+        <div class="row">
+            <button class="secondary" onclick="dataManager.openImport()">TXT IMPORT</button>
+        </div>
+    </div>
+</div>
+
+<!-- MAIN VIEWPORT -->
+<div id="main">
+    <div id="toolbar">
+        <span id="status-bar">Mode: World View</span>
+        <span id="status-message"></span>
+    </div>
+    
+    <div id="viewport">
+        <!-- Room Editor Canvas -->
+        <canvas id="room-canvas" width="480" height="288" style="display:none;"></canvas>
+        
+        <!-- World Map Canvas -->
+        <canvas id="world-canvas"></canvas>
+        
+        <!-- Minimap Overlay -->
+        <div id="minimap-overlay">
+            <canvas id="minimap-canvas" width="150" height="150"></canvas>
+            <div style="text-align:center; font-size:10px; color:#aaa; margin-top:2px;">Minimap</div>
+        </div>
+    </div>
+</div>
+
+<!-- PIXEL EDITOR OVERLAY -->
+<div id="pixel-editor-panel">
+    <div class="group" style="background: #222; padding: 20px; border: 1px solid #555; width: 520px;">
+        <h3>Tile / Asset Designer</h3>
+        <div style="display: flex; gap: 20px;">
+            <div>
+                <canvas id="pixel-canvas" width="256" height="256" style="border: 1px solid #555; cursor: crosshair;"></canvas>
+                <div class="helper-text">Left Click: Draw | Right Click: Erase</div>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                <div>
+                    <label>Name:</label>
+                    <input type="text" id="pe-name" value="NewTile">
+                </div>
+                <div style="display: flex; gap: 5px;">
+                     <div style="flex: 1;">
+                        <label>ID (Num):</label>
+                        <input type="number" id="pe-id" value="20">
+                     </div>
+                     <div style="flex: 1;">
+                        <label>Char (Map):</label>
+                        <input type="text" id="pe-char" value="" maxlength="1" placeholder="Ex: A">
+                     </div>
+                </div>
+                <div class="helper-text" style="text-align: left; margin-top: 0;">
+                    Character used in saved file map strings.
+                </div>
+                <div>
+                    <label>Type:</label>
+                    <select id="pe-type">
+                        <option value="1">SOLID (Wall)</option>
+                        <option value="0">NONE (Air/Decor)</option>
+                        <option value="2">LIQUID (Water)</option>
+                        <option value="4">CLIMBABLE (Ladder)</option>
+                        <option value="99">HAZARD (Spike)</option>
+                        <option value="8">PLATFORM (One-Way)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Colors:</label>
+                    <div id="pe-palette"></div>
+                </div>
+                <div style="margin-top: auto; display: flex; gap: 5px;">
+                    <button class="secondary" onclick="pixelEditor.close()">Cancel</button>
+                    <button class="success" onclick="pixelEditor.save()">SAVE & ADD</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DATA IMPORT/EXPORT MODAL -->
+<div id="json-modal">
+    <div style="height: 5%; display: flex; justify-content: space-between; color: white;">
+        <h3>Data Import/Export</h3>
+        <button onclick="document.getElementById('json-modal').style.display='none'">CLOSE</button>
+    </div>
+    <textarea id="json-io" placeholder="Paste your WORLD_LAYOUTS here..."></textarea>
+    <div style="height: 5%; display: flex; gap: 10px; align-items: center;">
+        <button class="success" onclick="dataManager.processImport()">LOAD DATA</button>
+        <span class="helper-text">Copy this content to data/rooms.js or paste existing content here.</span>
+    </div>
+</div>
+
+<script>
+/**
+ * ------------------------------------------------------------------
+ * CONSTANTS & CONFIG
+ * ------------------------------------------------------------------
+ */
+const TILE_SIZE = 16;
+const ROOM_COLS = 30;
+const ROOM_ROWS = 18;
+const ROOM_W = ROOM_COLS * TILE_SIZE; // 480
+const ROOM_H = ROOM_ROWS * TILE_SIZE; // 288
+
+// Engine Constants (Reference)
+const COLLISION_TYPE = {
+    NONE: 0, SOLID: 1, ONE_WAY: 2, LIQUID: 3, CLIMBABLE: 4, HAZARD: 5
+};
+
+const RENDER_STYLE = {
+    INVISIBLE: 0, BLOCK_BASIC: 1, LIQUID: 2, LADDER: 3, 
+    PLATFORM_WOOD: 4, SPIKE_ROCK: 5, OBJECT_MARKER: 6, CUSTOM: 100
+};
+
+// ------------------------------------------------------------------
+// DATA MAPPING CONFIGURATION (Refactored for Index Compatibility)
+// ------------------------------------------------------------------
+
+// Mappings for file I/O. 
+// IMPORT_MAP mirrors index.html's TILE_DATA_MAP
+let IMPORT_MAP = {
+    'x': 99, 
+    'X': 99
+};
+
+// EXPORT_MAP is the inverse for saving
+let EXPORT_MAP = {
+    99: 'x'
+};
+
+// Utility: Tile Codec for Hot-Pluggable Logic
+const TileCodec = {
+    /**
+     * Converts raw input (string char or number) into a standard Tile ID
+     */
+    decode(input) {
+        if (typeof input === 'number') return input;
+        
+        // 1. Check Configuration Table for special overrides
+        if (IMPORT_MAP.hasOwnProperty(input)) {
+            return IMPORT_MAP[input];
+        }
+        
+        // 2. Standard Fallback: Try parsing as integer
+        const val = parseInt(input);
+        return isNaN(val) ? 0 : val;
+    },
+
+    /**
+     * Converts a standard Tile ID into its string representation for saving
+     */
+    encode(id) {
+        // 1. Check Configuration Table for special overrides
+        if (EXPORT_MAP.hasOwnProperty(id)) {
+            return EXPORT_MAP[id];
+        }
+        
+        // 2. Standard Fallback: Convert to string
+        return id.toString();
+    },
+
+    // Registers a new custom mapping dynamically
+    registerMapping(id, char) {
+        if (!char || !id) return;
+        IMPORT_MAP[char] = id;
+        EXPORT_MAP[id] = char;
+        console.log(`[Editor] Registered mapping: ID ${id} <-> Char '${char}'`);
+    }
+};
+
+// Updated Tile Definitions
+let TILE_DEF = {
+    0:  { name: "Air",           col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.INVISIBLE,    isVoid: true },
+    1:  { name: "Dirt",          col: COLLISION_TYPE.SOLID,     ren: RENDER_STYLE.BLOCK_BASIC,  color: "#666688" },
+    2:  { name: "Water",         col: COLLISION_TYPE.LIQUID,    ren: RENDER_STYLE.LIQUID,       color: "rgba(68, 68, 255, 0.5)" },
+    3:  { name: "ChestNode",     col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.OBJECT_MARKER, color: "#d4af37", symbol: "C" },
+    4:  { name: "Ladder",        col: COLLISION_TYPE.CLIMBABLE, ren: RENDER_STYLE.LADDER,       color: "#888899", style: "ladder" },
+    5:  { name: "LightNode",     col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.OBJECT_MARKER, color: "#ffeedd", symbol: "L" },
+    6:  { name: "SecretWall",    col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.BLOCK_BASIC,  color: "#555577", alpha: 0.6 }, 
+    8:  { name: "WoodPlatform",  col: COLLISION_TYPE.ONE_WAY,   ren: RENDER_STYLE.PLATFORM_WOOD, color: "#8b4513", height: 4 },
+    10: { name: "DirtAlt",       col: COLLISION_TYPE.SOLID,     ren: RENDER_STYLE.BLOCK_BASIC,  color: "#555570" },
+    99: { name: "Spike",         col: COLLISION_TYPE.HAZARD,    ren: RENDER_STYLE.SPIKE_ROCK,   color: "#ff3333", style: "spike" }
+};
+
+let CUSTOM_SPRITES = {}; 
+
+let worldData = {
+    "0,0": Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0))
+};
+
+/**
+ * ------------------------------------------------------------------
+ * APPLICATION STATE
+ * ------------------------------------------------------------------
+ */
+const app = {
+    mode: 'world', // 'world' or 'room'
+    curRx: 0,
+    curRy: 0,
+    selectedTile: 1,
+    tool: 'pencil',
+    isDrawing: false,
+    
+    // Performance Tracking
+    lastPaintedTile: { x: -1, y: -1 },
+    
+    // History (Undo/Redo)
+    history: [],
+    redoStack: [],
+    MAX_HISTORY: 50,
+    
+    // Clipboard for Room Data
+    clipboard: null, 
+
+    // Canvas Contexts
+    ctxRoom: document.getElementById('room-canvas').getContext('2d'),
+    ctxWorld: document.getElementById('world-canvas').getContext('2d'),
+    ctxMini: document.getElementById('minimap-canvas').getContext('2d'),
+    
+    // World View Camera
+    camX: 0,
+    camY: 0,
+    zoom: 0.5,
+    isDragging: false,
+    lastMouse: {x:0, y:0},
+    keys: {},
+
+    init() {
+        this.renderPalette();
+        this.resizeCanvas();
+        window.addEventListener('resize', () => this.resizeCanvas());
+        this.setupInputs();
+        this.setMode('world');
+        this.centerView();
+        this.drawWorld();
+    },
+
+    resizeCanvas() {
+        const vp = document.getElementById('viewport');
+        const cvs = document.getElementById('world-canvas');
+        cvs.width = vp.clientWidth;
+        cvs.height = vp.clientHeight;
+        if(this.mode === 'world') this.drawWorld();
+    },
+
+    setMode(m) {
+        this.mode = m;
+        document.getElementById('btn-mode-world').className = m === 'world' ? 'active' : '';
+        document.getElementById('btn-mode-room').className = m === 'room' ? 'active' : '';
+        document.getElementById('status-bar').innerText = m === 'world' ? 
+            'Mode: World Map (Click/Drag to Nav. Double-click to Edit)' : 
+            'Mode: Room Editor (Left Click Draw, Right Click Erase)';
+        
+        document.getElementById('room-canvas').style.display = m === 'room' ? 'block' : 'none';
+        document.getElementById('world-canvas').style.display = m === 'world' ? 'block' : 'none';
+        document.getElementById('minimap-overlay').style.display = m === 'room' ? 'block' : 'none';
+
+        if (m === 'room') {
+            this.drawRoom();
+            this.drawMinimap();
+        } else {
+            this.drawWorld();
+        }
+    },
+
+    setTool(t) { 
+        this.tool = t; 
+        document.getElementById('tool-pencil').className = t === 'pencil' ? 'active' : '';
+        document.getElementById('tool-bucket').className = t === 'bucket' ? 'active' : '';
+    },
+    
+    showMessage(msg) {
+        const el = document.getElementById('status-message');
+        el.innerText = msg;
+        el.style.color = '#fff';
+        setTimeout(() => el.innerText = '', 2000);
+    },
+
+    // --- UNDO / REDO SYSTEM ---
+
+    saveState() {
+        if (this.mode !== 'room') return;
+        const key = `${this.curRx},${this.curRy}`;
+        if (!worldData[key]) return;
+
+        // Deep copy the current room state
+        const state = worldData[key].map(row => [...row]);
+        this.history.push({ key, data: state });
+        
+        if (this.history.length > this.MAX_HISTORY) this.history.shift();
+        this.redoStack = []; // Clear redo on new action
+    },
+
+    undo() {
+        if (this.history.length === 0) {
+            this.showMessage("Nothing to Undo");
+            return;
+        }
+
+        const currentState = this.history.pop();
+        const key = currentState.key;
+        
+        // Save current state to redo stack before reverting
+        if (worldData[key]) {
+            this.redoStack.push({ key, data: worldData[key].map(row => [...row]) });
+        }
+
+        // Apply undo
+        worldData[key] = currentState.data;
+        
+        if (key === `${this.curRx},${this.curRy}`) {
+            this.drawRoom();
+            this.drawMinimap();
+        }
+        this.showMessage("Undo");
+    },
+
+    redo() {
+        if (this.redoStack.length === 0) {
+            this.showMessage("Nothing to Redo");
+            return;
+        }
+
+        const nextState = this.redoStack.pop();
+        const key = nextState.key;
+
+        // Save current to history again
+        if (worldData[key]) {
+            this.history.push({ key, data: worldData[key].map(row => [...row]) });
+        }
+
+        worldData[key] = nextState.data;
+
+        if (key === `${this.curRx},${this.curRy}`) {
+            this.drawRoom();
+            this.drawMinimap();
+        }
+        this.showMessage("Redo");
+    },
+
+    // --- ROOM ACTIONS ---
+    
+    copyRoom() {
+        const key = `${this.curRx},${this.curRy}`;
+        if (worldData[key]) {
+            this.clipboard = worldData[key].map(row => [...row]);
+            this.showMessage(`Copied Room ${key}`);
+        }
+    },
+
+    cutRoom() {
+        this.saveState(); 
+        const key = `${this.curRx},${this.curRy}`;
+        if (worldData[key]) {
+            this.clipboard = worldData[key].map(row => [...row]);
+            delete worldData[key];
+            this.showMessage(`Cut Room ${key}`);
+            this.refreshViews();
+        }
+    },
+
+    pasteRoom() {
+        if (!this.clipboard) return this.showMessage("Clipboard empty");
+        this.saveState(); 
+        const key = `${this.curRx},${this.curRy}`;
+        worldData[key] = this.clipboard.map(row => [...row]);
+        this.showMessage(`Pasted to ${key}`);
+        this.refreshViews();
+    },
+
+    deleteRoom() {
+        const key = `${this.curRx},${this.curRy}`;
+        if (worldData[key] && confirm(`Delete Room ${key} permanently?`)) {
+            this.saveState(); 
+            delete worldData[key];
+            this.showMessage(`Deleted Room ${key}`);
+            this.refreshViews();
+        }
+    },
+
+    clearRoomContent() {
+        const key = `${this.curRx},${this.curRy}`;
+        if(confirm(`Clear tiles in Room ${key}?`)) {
+            this.saveState();
+            worldData[key] = Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
+            this.refreshViews();
+            this.showMessage(`Cleared tiles in ${key}`);
+        }
+    },
+    
+    refreshViews() {
+        if (this.mode === 'world') this.drawWorld();
+        else { this.drawRoom(); this.drawMinimap(); }
+    },
+
+    selectRoom(x, y) {
+        this.curRx = x;
+        this.curRy = y;
+        this.refreshViews();
+    },
+
+    editCurrentRoom() {
+        const key = `${this.curRx},${this.curRy}`;
+        if (!worldData[key]) {
+            worldData[key] = Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
+        }
+        this.setMode('room');
+    },
+    
+    centerView() {
+        const cvs = document.getElementById('world-canvas');
+        this.camX = cvs.width/2;
+        this.camY = cvs.height/2;
+        this.drawWorld();
+    },
+
+    // --- DRAWING LOGIC ---
+
+    drawRoom() {
+        if (this.mode !== 'room') return;
+        const ctx = this.ctxRoom;
+        const key = `${this.curRx},${this.curRy}`;
+        const data = worldData[key];
+        
+        // Clear canvas (Transparent/CSS background handles grid)
+        ctx.clearRect(0,0, 480, 288);
+        
+        if(data) {
+            for(let y=0; y<ROOM_ROWS; y++) {
+                if (!data[y]) continue; 
+                for(let x=0; x<ROOM_COLS; x++) {
+                    const tid = data[y][x];
+                    if (tid !== 0) this.drawTile(ctx, x*TILE_SIZE, y*TILE_SIZE, tid, TILE_SIZE);
+                }
+            }
+        }
+        
+        // Draw Grid Overlay for better visibility (Optional)
+        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for(let x=0; x<=ROOM_COLS; x++) { ctx.moveTo(x*TILE_SIZE,0); ctx.lineTo(x*TILE_SIZE, ROOM_H); }
+        for(let y=0; y<=ROOM_ROWS; y++) { ctx.moveTo(0, y*TILE_SIZE); ctx.lineTo(ROOM_W, y*TILE_SIZE); }
+        ctx.stroke();
+    },
+
+    drawTile(ctx, x, y, id, size) {
+        const def = TILE_DEF[id];
+        if(!def) return;
+        
+        if (CUSTOM_SPRITES[id]) {
+            ctx.drawImage(CUSTOM_SPRITES[id], x, y, size, size);
+        } else {
+            // Background color fill
+            if (def.color) {
+                ctx.fillStyle = def.color;
+                if (def.alpha) ctx.globalAlpha = def.alpha;
+                
+                if (def.height) {
+                    // Platform style (top part)
+                    ctx.fillRect(x, y, size, def.height);
+                } else if(def.style === "spike") {
+                    // Draw nothing here, handled below
+                } else {
+                    // Full block
+                    ctx.fillRect(x, y, size, size);
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+            // --- Specific Shapes & Symbols ---
+            
+            // Symbol (Text)
+            if (def.symbol) {
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 12px monospace";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(def.symbol, x + size/2, y + size/2);
+            }
+
+            // Ladder
+            if (def.style === 'ladder') {
+                ctx.fillStyle = "rgba(0,0,0,0.3)";
+                ctx.fillRect(x + 4, y, 2, size);
+                ctx.fillRect(x + 10, y, 2, size);
+                for(let i=2; i<size; i+=4) ctx.fillRect(x+4, y+i, 8, 2);
+            }
+
+            // Spike (Triangle/X)
+            if (def.style === 'spike') {
+                ctx.fillStyle = def.color || "#f00";
+                ctx.beginPath();
+                // Upward triangle
+                ctx.moveTo(x + 2, y + size);
+                ctx.lineTo(x + size/2, y + 2);
+                ctx.lineTo(x + size - 2, y + size);
+                ctx.closePath();
+                ctx.fill();
+            }
+            
+            // Border for solid blocks
+            if (!def.symbol && !def.height && !def.style && id !== 0) {
+                ctx.strokeStyle = "rgba(0,0,0,0.3)";
+                ctx.strokeRect(x, y, size, size);
+            }
+        }
+    },
+
+    drawWorld() {
+        if (this.mode !== 'world') return;
+        const ctx = this.ctxWorld;
+        const cvs = document.getElementById('world-canvas');
+        
+        ctx.fillStyle = "#090909";
+        ctx.fillRect(0,0, cvs.width, cvs.height);
+
+        const roomW = 60 * this.zoom; 
+        const roomH = 36 * this.zoom; 
+        const gap = 4 * this.zoom;
+        const cellW = roomW + gap;
+        const cellH = roomH + gap;
+
+        // Grid Lines
+        ctx.strokeStyle = "#222";
+        ctx.lineWidth = 1;
+        const startX = (this.camX % cellW) - cellW; 
+        const startY = (this.camY % cellH) - cellH;
+
+        ctx.beginPath();
+        for(let x = startX; x < cvs.width + cellW; x += cellW) {
+            ctx.moveTo(x, 0); ctx.lineTo(x, cvs.height);
+        }
+        for(let y = startY; y < cvs.height + cellH; y += cellH) {
+            ctx.moveTo(0, y); ctx.lineTo(cvs.width, y);
+        }
+        ctx.stroke();
+
+        // Origin Lines
+        ctx.strokeStyle = "#444";
+        ctx.beginPath();
+        ctx.moveTo(0, this.camY); ctx.lineTo(cvs.width, this.camY);
+        ctx.moveTo(this.camX, 0); ctx.lineTo(this.camX, cvs.height);
+        ctx.stroke();
+
+        // Rooms
+        for (let key in worldData) {
+            const [rx, ry] = key.split(',').map(Number);
+            const scX = this.camX + (rx * cellW);
+            const scY = this.camY + (ry * cellH);
+            
+            if (scX + roomW < 0 || scX > cvs.width || scY + roomH < 0 || scY > cvs.height) continue;
+            
+            ctx.fillStyle = "#333344";
+            ctx.fillRect(scX, scY, roomW, roomH);
+            ctx.strokeStyle = "#555";
+            ctx.strokeRect(scX, scY, roomW, roomH);
+
+            // Preview
+            const rData = worldData[key];
+            const pSize = roomW / ROOM_COLS;
+            if (this.zoom > 0.4 && rData) { 
+                for(let r=0; r<ROOM_ROWS; r++) {
+                    if (!rData[r]) continue;
+                    for(let c=0; c<ROOM_COLS; c++) {
+                        if (rData[r][c] !== 0) {
+                            ctx.fillStyle = TILE_DEF[rData[r][c]] ? (TILE_DEF[rData[r][c]].color || 'transparent') : '#888';
+                            if(ctx.fillStyle !== 'transparent') ctx.fillRect(scX + c*pSize, scY + r*pSize, pSize, pSize);
+                        }
+                    }
+                }
+            }
+            
+            // Label
+            if (this.zoom > 0.6) {
+                ctx.fillStyle = "white";
+                ctx.font = `${10*this.zoom}px monospace`;
+                ctx.fillText(`${rx},${ry}`, scX + 2, scY + 12*this.zoom);
+            }
+        }
+
+        // Selection
+        const selScX = this.camX + (this.curRx * cellW);
+        const selScY = this.camY + (this.curRy * cellH);
+        
+        ctx.strokeStyle = "#00ff00";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(selScX, selScY, roomW, roomH);
+        
+        ctx.fillStyle = "#0f0";
+        ctx.font = `${12}px monospace`;
+        ctx.fillText(`SEL: ${this.curRx},${this.curRy}`, selScX, selScY - 5);
+    },
+
+    drawMinimap() {
+        const ctx = this.ctxMini;
+        const cvs = document.getElementById('minimap-canvas');
+        
+        // Clear transparency
+        ctx.clearRect(0,0,cvs.width, cvs.height);
+        
+        // Larger Minimap: Show 5x5 grid or 3x3 but bigger
+        const range = 1; // 1 = 3x3 grid
+        const visualScale = 1.5; // Scale up the minimap visual
+        const roomPixW = 30 * visualScale; 
+        const roomPixH = 18 * visualScale; 
+        
+        const centerX = cvs.width / 2;
+        const centerY = cvs.height / 2;
+
+        const rangeArr = [-1, 0, 1];
+        
+        rangeArr.forEach(dy => {
+            rangeArr.forEach(dx => {
+                const tx = this.curRx + dx;
+                const ty = this.curRy + dy;
+                const key = `${tx},${ty}`;
+                
+                // Calculate position relative to center
+                const drawX = centerX + (dx * roomPixW) - (roomPixW/2);
+                const drawY = centerY + (dy * roomPixH) - (roomPixH/2);
+                
+                ctx.strokeStyle = "rgba(100,100,100,0.5)";
+                ctx.lineWidth = 1;
+                ctx.strokeRect(drawX, drawY, roomPixW, roomPixH);
+
+                if (worldData[key]) {
+                    ctx.fillStyle = (dx===0 && dy===0) ? "rgba(34,51,34,0.9)" : "rgba(17,17,34,0.9)";
+                    ctx.fillRect(drawX, drawY, roomPixW, roomPixH);
+                    
+                    const rData = worldData[key];
+                    const dotW = roomPixW / ROOM_COLS;
+                    const dotH = roomPixH / ROOM_ROWS;
+
+                    for(let r=0; r<ROOM_ROWS; r++) { 
+                        if (!rData[r]) continue;
+                        for(let c=0; c<ROOM_COLS; c++) {
+                            const tid = rData[r][c];
+                            if (tid !== 0 && TILE_DEF[tid]) {
+                                ctx.fillStyle = TILE_DEF[tid].color || 'transparent';
+                                if(ctx.fillStyle !== 'transparent') 
+                                    ctx.fillRect(drawX + c*dotW, drawY + r*dotH, Math.ceil(dotW), Math.ceil(dotH));
+                            }
+                        }
+                    }
+                } else if(dx===0 && dy===0) {
+                     ctx.fillStyle = "rgba(17,17,17,0.9)";
+                     ctx.fillRect(drawX, drawY, roomPixW, roomPixH);
+                }
+                
+                if(dx===0 && dy===0) {
+                    ctx.strokeStyle = "#0f0";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(drawX, drawY, roomPixW, roomPixH);
+                }
+            });
+        });
+    },
+
+    // --- INTERACTION ---
+
+    renderPalette() {
+        const p = document.getElementById('palette');
+        p.innerHTML = '';
+        Object.keys(TILE_DEF).forEach(k => {
+            const def = TILE_DEF[k];
+            // Skip rendering Air in palette if you want, but useful to have 'Eraser' effectively
+            const div = document.createElement('div');
+            div.className = `p-btn ${parseInt(k) === this.selectedTile ? 'active' : ''}`;
+            
+            if (CUSTOM_SPRITES[k]) {
+                const img = document.createElement('img');
+                img.src = CUSTOM_SPRITES[k].src;
+                div.appendChild(img);
+                
+                // Show char code for custom sprites
+                if (EXPORT_MAP[k]) {
+                    const charBadge = document.createElement('div');
+                    charBadge.innerText = EXPORT_MAP[k];
+                    charBadge.style.position = 'absolute';
+                    charBadge.style.bottom = '0';
+                    charBadge.style.right = '0';
+                    charBadge.style.background = 'rgba(0,0,0,0.7)';
+                    charBadge.style.fontSize = '8px';
+                    charBadge.style.padding = '1px 3px';
+                    div.appendChild(charBadge);
+                }
+            } else {
+                div.style.backgroundColor = def.color || '#222'; // Dark bg for Air
+                if(def.symbol) div.innerText = def.symbol;
+                else if (def.style === 'spike') div.innerText = "X"; // Special case for Spike icon
+                else div.innerText = def.name.substring(0,2);
+                
+                // Special style for Air in palette
+                if (k === "0") {
+                   div.innerText = "Air";
+                   div.style.color = "#666";
+                   div.style.border = "1px dashed #444";
+                }
+            }
+            
+            div.title = `${def.name} (ID: ${k})`;
+            div.onclick = () => {
+                this.selectedTile = parseInt(k);
+                this.renderPalette();
+            };
+            p.appendChild(div);
+        });
+    },
+
+    setupInputs() {
+        // Keyboard
+        window.addEventListener('keydown', e => {
+            if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            this.keys[e.code] = true;
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.code) {
+                    case 'KeyC': e.preventDefault(); this.copyRoom(); break;
+                    case 'KeyX': e.preventDefault(); this.cutRoom(); break;
+                    case 'KeyV': e.preventDefault(); this.pasteRoom(); break;
+                    case 'KeyS': e.preventDefault(); dataManager.saveWithUI(); break;
+                    case 'KeyZ': e.preventDefault(); this.undo(); break;
+                    case 'KeyY': e.preventDefault(); this.redo(); break;
+                }
+            }
+            if (e.code === 'Delete' || e.code === 'Backspace') {
+                e.preventDefault();
+                this.deleteRoom();
+            }
+            // Tool Shortcuts
+            if (e.code === 'KeyP') this.setTool('pencil');
+            if (e.code === 'KeyB') this.setTool('bucket');
+        });
+        
+        window.addEventListener('keyup', e => this.keys[e.code] = false);
+
+        // WORLD CANVAS
+        const wCvs = document.getElementById('world-canvas');
+        wCvs.addEventListener('contextmenu', e => e.preventDefault());
+        wCvs.addEventListener('mousedown', e => {
+            if (e.button === 1 || e.button === 2 || (e.button === 0 && this.keys['Space'])) {
+                e.preventDefault();
+                this.isDragging = true;
+                this.lastMouse = {x: e.clientX, y: e.clientY};
+                wCvs.style.cursor = 'grabbing';
+            }
+        });
+        
+        window.addEventListener('mousemove', e => {
+            if (this.isDragging && this.mode === 'world') {
+                const dx = e.clientX - this.lastMouse.x;
+                const dy = e.clientY - this.lastMouse.y;
+                this.camX += dx;
+                this.camY += dy;
+                this.lastMouse = {x: e.clientX, y: e.clientY};
+                this.drawWorld();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            this.isDragging = false;
+            this.isDrawing = false;
+            wCvs.style.cursor = 'grab';
+        });
+        
+        wCvs.addEventListener('click', e => {
+            if (e.button !== 0 || this.keys['Space'] || this.isDragging) return; 
+            const rect = wCvs.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            
+            const cellW = (60 * this.zoom) + (4 * this.zoom);
+            const cellH = (36 * this.zoom) + (4 * this.zoom);
+            
+            const gridX = Math.round((mx - this.camX) / cellW);
+            const gridY = Math.round((my - this.camY) / cellH);
+            this.selectRoom(gridX, gridY);
+        });
+
+        wCvs.addEventListener('dblclick', e => {
+            if (e.button !== 0) return;
+            const rect = wCvs.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            const cellW = (60 * this.zoom) + (4 * this.zoom);
+            const cellH = (36 * this.zoom) + (4 * this.zoom);
+            
+            const gridX = Math.round((mx - this.camX) / cellW);
+            const gridY = Math.round((my - this.camY) / cellH);
+            this.selectRoom(gridX, gridY);
+            this.editCurrentRoom();
+        });
+
+        wCvs.addEventListener('wheel', e => {
+            e.preventDefault();
+            const rect = wCvs.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const delta = -e.deltaY * 0.001;
+            const oldZoom = this.zoom;
+            let newZoom = Math.max(0.1, Math.min(oldZoom + delta, 5.0));
+            const worldX = (mouseX - this.camX) / oldZoom;
+            const worldY = (mouseY - this.camY) / oldZoom;
+            this.camX = mouseX - (worldX * newZoom);
+            this.camY = mouseY - (worldY * newZoom);
+            this.zoom = newZoom;
+            this.drawWorld();
+        });
+
+        // ROOM CANVAS (FIXED PERFORMANCE)
+        const rCvs = document.getElementById('room-canvas');
+        
+        const getTileCoords = (e) => {
+            const rect = rCvs.getBoundingClientRect();
+            const scaleX = rCvs.width / rect.width;
+            const scaleY = rCvs.height / rect.height;
+            return {
+                x: Math.floor(((e.clientX - rect.left) * scaleX) / TILE_SIZE),
+                y: Math.floor(((e.clientY - rect.top) * scaleY) / TILE_SIZE)
+            };
+        };
+
+        const paint = (e, isClick) => {
+            const {x, y} = getTileCoords(e);
+            if(x<0 || x>=ROOM_COLS || y<0 || y>=ROOM_ROWS) return;
+            
+            // PERFORMANCE FIX: 
+            // 1. If dragging, don't repaint the same tile over and over
+            if (!isClick && x === this.lastPaintedTile.x && y === this.lastPaintedTile.y) return;
+            
+            this.lastPaintedTile = { x, y };
+
+            const key = `${this.curRx},${this.curRy}`;
+            // SAFETY FIX: Ensure room data exists before painting to prevent crash/freeze
+            if (!worldData[key]) {
+                worldData[key] = Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
+            }
+            if (!worldData[key][y]) {
+                // Should not happen if init correctly, but safety first
+                return;
+            }
+
+            let val = this.selectedTile;
+            if (e.buttons === 2) val = 0; 
+            
+            // CRITICAL FIX: Only flood fill on initial click, NEVER on drag
+            if (this.tool === 'bucket') {
+                if (isClick && e.buttons === 1) {
+                    this.floodFill(x, y, val);
+                    this.drawRoom();
+                    this.drawMinimap();
+                }
+            } else {
+                // Pencil
+                if (worldData[key][y][x] !== val) {
+                    worldData[key][y][x] = val;
+                    this.drawRoom();
+                    this.drawMinimap();
+                }
+            }
+        };
+
+        rCvs.addEventListener('mousedown', e => {
+            // Save state for UNDO before modifying
+            if (e.button === 0 || e.button === 2) {
+                this.saveState();
+            }
+
+            this.isDrawing = true;
+            this.lastPaintedTile = {x: -1, y: -1}; // Reset
+            paint(e, true);
+        });
+        rCvs.addEventListener('mousemove', e => {
+            if(this.isDrawing) paint(e, false);
+        });
+        rCvs.addEventListener('contextmenu', e => e.preventDefault());
+    },
+
+    floodFill(x, y, val) {
+        const key = `${this.curRx},${this.curRy}`;
+        const grid = worldData[key];
+        const target = grid[y][x];
+        if(target === val) return;
+        
+        const stack = [[x,y]];
+        while(stack.length) {
+            const [cx, cy] = stack.pop();
+            if(cx<0 || cx>=ROOM_COLS || cy<0 || cy>=ROOM_ROWS) continue;
+            if(grid[cy][cx] === target) {
+                grid[cy][cx] = val;
+                stack.push([cx+1,cy], [cx-1,cy], [cx,cy+1], [cx,cy-1]);
+            }
+        }
+    }
+};
+
+const pixelEditor = {
+    canvas: document.getElementById('pixel-canvas'),
+    ctx: document.getElementById('pixel-canvas').getContext('2d'),
+    gridSize: 16,
+    pixels: [],
+    currentColor: '#ffffff',
+    paletteColors: ['#000000', '#111122', '#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff', '#ff00ff', '#444455', '#d4af37'],
+
+    init() {
+        const palContainer = document.getElementById('pe-palette');
+        this.paletteColors.forEach(c => {
+            const s = document.createElement('div');
+            s.className = 'color-swatch';
+            s.style.backgroundColor = c;
+            s.onclick = () => {
+                this.currentColor = c;
+                document.querySelectorAll('.color-swatch').forEach(el=>el.classList.remove('active'));
+                s.classList.add('active');
+            };
+            palContainer.appendChild(s);
+        });
+
+        let drawing = false;
+        const paint = (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const scale = this.canvas.width / rect.width;
+            const x = Math.floor((e.clientX - rect.left) * scale / (this.canvas.width/this.gridSize));
+            const y = Math.floor((e.clientY - rect.top) * scale / (this.canvas.height/this.gridSize));
+            if(x<0||x>=this.gridSize||y<0||y>=this.gridSize) return;
+            this.pixels[y][x] = (e.buttons === 2) ? null : this.currentColor;
+            this.render();
+        };
+
+        this.canvas.addEventListener('mousedown', e => { drawing = true; paint(e); });
+        this.canvas.addEventListener('mousemove', e => { if(drawing) paint(e); });
+        window.addEventListener('mouseup', () => drawing = false);
+        this.canvas.addEventListener('contextmenu', e => e.preventDefault());
+    },
+
+    open() {
+        document.getElementById('pixel-editor-panel').style.display = 'flex';
+        this.pixels = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
+        const keys = Object.keys(TILE_DEF).map(Number).sort((a,b)=>a-b);
+        document.getElementById('pe-id').value = keys[keys.length-1] + 1;
+        document.getElementById('pe-char').value = '';
+        this.render();
+    },
+
+    close() { document.getElementById('pixel-editor-panel').style.display = 'none'; },
+
+    render() {
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        const pSize = w / this.gridSize;
+        this.ctx.fillStyle = '#333';
+        this.ctx.fillRect(0,0,w,h);
+        this.ctx.fillStyle = '#444';
+        for(let y=0; y<this.gridSize; y++) {
+            for(let x=0; x<this.gridSize; x++) {
+                if((x+y)%2===0) this.ctx.fillRect(x*pSize, y*pSize, pSize, pSize);
+            }
+        }
+        for(let y=0; y<this.gridSize; y++) {
+            for(let x=0; x<this.gridSize; x++) {
+                if(this.pixels[y][x]) {
+                    this.ctx.fillStyle = this.pixels[y][x];
+                    this.ctx.fillRect(x*pSize, y*pSize, pSize, pSize);
+                }
+            }
+        }
+        this.ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        this.ctx.beginPath();
+        for(let i=0; i<=this.gridSize; i++) {
+            this.ctx.moveTo(i*pSize, 0); this.ctx.lineTo(i*pSize, h);
+            this.ctx.moveTo(0, i*pSize); this.ctx.lineTo(w, i*pSize);
+        }
+        this.ctx.stroke();
+    },
+
+    save() {
+        const id = parseInt(document.getElementById('pe-id').value);
+        const name = document.getElementById('pe-name').value;
+        const char = document.getElementById('pe-char').value;
+        const type = document.getElementById('pe-type').value;
+        const typeName = document.getElementById('pe-type').options[document.getElementById('pe-type').selectedIndex].text;
+
+        if(!id || !name) return alert("ID and Name required");
+        
+        // --- Validation: Check if Char is used ---
+        if (char && IMPORT_MAP[char] && IMPORT_MAP[char] !== id) {
+            return alert(`Error: Character '${char}' is already used by ID ${IMPORT_MAP[char]}.`);
+        }
+        
+        // --- Validation: Check if ID is used ---
+        if (TILE_DEF[id] && !confirm(`ID ${id} already exists (${TILE_DEF[id].name}). Overwrite?`)) return;
+
+        const tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = 16; tmpCanvas.height = 16;
+        const tCtx = tmpCanvas.getContext('2d');
+        for(let y=0; y<16; y++) {
+            for(let x=0; x<16; x++) {
+                if(this.pixels[y][x]) {
+                    tCtx.fillStyle = this.pixels[y][x];
+                    tCtx.fillRect(x,y,1,1);
+                }
+            }
+        }
+        const dataURL = tmpCanvas.toDataURL();
+        const imgObj = new Image();
+        imgObj.src = dataURL;
+        CUSTOM_SPRITES[id] = imgObj;
+
+        // Register Mapping
+        if (char) {
+            TileCodec.registerMapping(id, char);
+        }
+
+        TILE_DEF[id] = { 
+            name: name, 
+            color: '#fff', 
+            code: typeName, 
+            customData: dataURL, 
+            collisionId: parseInt(type),
+            char: char 
+        };
+        app.renderPalette();
+        this.close();
+        app.showMessage(`Saved custom tile ${name} (${char || id})`);
+    }
+};
+
+const dataManager = {
+    fileHandle: null,
+
+    openImport() { document.getElementById('json-modal').style.display = 'block'; },
+    
+    // Legacy / Basic Input handler
+    onFileSelected(input) {
+        const file = input.files[0];
+        if(!file) return;
+        this.fileHandle = null; // Basic input cannot overwrite, so nullify handle
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const txt = e.target.result;
+            this.parseData(txt);
+        };
+        reader.readAsText(file);
+    },
+
+    // Native API (Smart Wrapper)
+    async openSmart() {
+        // Feature detection for File System Access API (Chrome/Edge/Opera)
+        if ('showOpenFilePicker' in window) {
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{ description: 'JS/JSON', accept: {'text/javascript': ['.js', '.json', '.txt']} }]
+                });
+                this.fileHandle = handle;
+                const file = await handle.getFile();
+                const text = await file.text();
+                this.parseData(text);
+            } catch(e) { 
+                // User cancelled or error
+                if (e.name !== 'AbortError') console.error(e);
+            }
+        } else {
+            // Fallback for Safari/Firefox: Trigger the hidden file input
+            // This allows the user to still open files seamlessly
+            document.getElementById('file-loader').click();
+        }
+    },
+
+    processImport() {
+        const txt = document.getElementById('json-io').value;
+        this.fileHandle = null; // Text import cannot overwrite file
+        this.parseData(txt);
+    },
+    
+    parseData(txt) {
+        try {
+            let jsonStr = txt;
+            
+            // ROBUST PARSING FIX: 
+            if (txt.includes("WORLD_LAYOUTS =")) {
+                const start = txt.indexOf("{", txt.indexOf("WORLD_LAYOUTS"));
+                if (start !== -1) {
+                    let braceCount = 0;
+                    let end = -1;
+                    for (let i = start; i < txt.length; i++) {
+                        if (txt[i] === '{') braceCount++;
+                        else if (txt[i] === '}') {
+                            braceCount--;
+                            if (braceCount === 0) {
+                                end = i;
+                                break;
+                            }
+                        }
+                    }
+                    if (end !== -1) {
+                        jsonStr = txt.substring(start, end+1);
+                    }
+                }
+            }
+            
+            try {
+                worldData = JSON.parse(jsonStr);
+            } catch(e) {
+                const fixed = jsonStr.replace(/([a-zA-Z0-9_-]+):/g, '"$1":');
+                worldData = JSON.parse(fixed);
+            }
+            
+            this.sanitizeData(); // NORMALIZE DATA
+            
+            alert("Data Loaded Successfully!");
+            app.history = []; // Clear undo history on new load
+            app.renderPalette(); // Refresh palette in case of new custom tiles
+            app.selectRoom(0,0);
+            document.getElementById('json-modal').style.display = 'none';
+        } catch(e) {
+            console.error(e);
+            alert("Failed to parse. Ensure content is a valid JSON object or the JS object from a saved file.");
+        }
+    },
+    
+    sanitizeData() {
+        // OPTIMIZED SANITIZATION using TileCodec
+        for (let key in worldData) {
+            if (!Array.isArray(worldData[key])) {
+                worldData[key] = []; 
+            }
+            
+            for (let y = 0; y < ROOM_ROWS; y++) {
+                let row = worldData[key][y];
+
+                // 1. Convert String rows to Array using Decoder
+                if (typeof row === 'string') {
+                    // Split string and map each char through decode
+                    row = row.split('').map(char => TileCodec.decode(char));
+                }
+                
+                // 2. Ensure it is an Array
+                if (!Array.isArray(row)) {
+                    row = Array(ROOM_COLS).fill(0);
+                }
+                
+                // 3. Normalize Length (Pad with 0s)
+                if (row.length < ROOM_COLS) {
+                    const missing = ROOM_COLS - row.length;
+                    for (let k = 0; k < missing; k++) row.push(0);
+                }
+                
+                // 4. Final Validation: Ensure every cell is a valid ID number
+                // This handles cases where mixed types might exist in an array
+                for (let x = 0; x < ROOM_COLS; x++) {
+                    row[x] = TileCodec.decode(row[x]);
+                }
+
+                // Write back the clean row
+                worldData[key][y] = row;
+            }
+        }
+    },
+
+    saveWithUI() {
+        // Always show the modal to allow Save As New options
+        document.getElementById('save-modal').style.display = 'flex';
+    },
+
+    async saveOverwrite() {
+        document.getElementById('save-modal').style.display = 'none';
+        if (!this.fileHandle) {
+            alert("No source file to overwrite. Using Save As instead.");
+            return this.saveAsNew();
+        }
+
+        const jsContent = this.generateOutput();
+        try {
+            const writable = await this.fileHandle.createWritable();
+            await writable.write(jsContent);
+            await writable.close();
+            app.showMessage("Saved to " + this.fileHandle.name);
+        } catch(e) {
+            console.error(e);
+            alert("Failed to overwrite. Please use Save As.");
+        }
+    },
+
+    async saveAsNew() {
+        document.getElementById('save-modal').style.display = 'none';
+        const jsContent = this.generateOutput();
+        
+        // 1. Try File System Access API (Save As...)
+        // Check if supported (Safari doesn't support this)
+        if ('showSaveFilePicker' in window) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: 'rooms.js',
+                    types: [{
+                        description: 'JavaScript File',
+                        accept: {'text/javascript': ['.js']}
+                    }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(jsContent);
+                await writable.close();
+                // Update current file handle to this new one so overwrite works next time
+                this.fileHandle = handle;
+                app.showMessage("File saved successfully.");
+                return;
+            } catch (err) {
+                if(err.name !== 'AbortError') console.error(err);
+                if(err.name === 'AbortError') return;
+            }
+        } 
+        
+        // 2. Fallback to Blob Download (Standard for Safari/Firefox)
+        this.download(jsContent);
+    },
+
+    generateOutput() {
+        let jsContent = `// -------------------------------------------\n`;
+        jsContent += `// AUTOMATICALLY GENERATED BY BOSS BUILDER\n`;
+        jsContent += `// -------------------------------------------\n\n`;
+        
+        jsContent += `const WORLD_LAYOUTS = {\n`;
+        const keys = Object.keys(worldData).sort();
+        keys.forEach((key, i) => {
+            if (!Array.isArray(worldData[key])) return;
+            
+            jsContent += `    "${key}": [\n`;
+            worldData[key].forEach((row, ri) => {
+                // EXPORT AS STRING LOGIC (Optimized)
+                // Use TileCodec.encode to handle specific mappings (like 99 -> 'x')
+                const rowStr = row.map(cell => TileCodec.encode(cell)).join('');
+                
+                jsContent += `        "${rowStr}"${ri < 17 ? ',' : ''}\n`;
+            });
+            jsContent += `    ]${i < keys.length-1 ? ',' : ''}\n`;
+        });
+        jsContent += `};\n\n`;
+
+        // --- NEW: COMPATIBILITY INJECTION FOR INDEX.HTML ---
+        
+        // 1. Export Mappings (so index knows that 'A' = 101)
+        jsContent += `// --- EDITOR <-> INDEX SHARED MAPPINGS ---\n`;
+        jsContent += `if (typeof TILE_DATA_MAP !== 'undefined') {\n`;
+        const customMappings = Object.entries(IMPORT_MAP).filter(([k, v]) => k !== 'x' && k !== 'X'); // Skip defaults
+        if (customMappings.length > 0) {
+            jsContent += `    Object.assign(TILE_DATA_MAP, {\n`;
+            customMappings.forEach(([char, id]) => {
+                jsContent += `        '${char}': ${id},\n`;
+            });
+            jsContent += `    });\n`;
+        }
+        jsContent += `}\n\n`;
+
+        // 2. Export Definitions & Visuals
+        const customKeys = Object.keys(TILE_DEF).filter(k => TILE_DEF[k].customData);
+        if (customKeys.length > 0) {
+            jsContent += `// --- CUSTOM TILE ASSETS & DEFINITIONS ---\n`;
+            jsContent += `if (typeof TILE_DEF !== 'undefined') {\n`;
+            customKeys.forEach(k => {
+                const t = TILE_DEF[k];
+                // Note: We use ren: 100 (RENDER_STYLE.CUSTOM)
+                // We inject the base64 data directly into the definition
+                jsContent += `    TILE_DEF[${k}] = { name: "${t.name}", col: ${t.collisionId}, ren: 100, customSrc: "${t.customData}" };\n`;
+            });
+            jsContent += `}\n`;
+
+            jsContent += `\n// --- DYNAMIC RENDER LOGIC FOR CUSTOM TILES ---\n`;
+            jsContent += `if(typeof RenderRegistry !== 'undefined') {\n`;
+            jsContent += `  // Register Generic Handler for ID 100 (Custom)\n`;
+            jsContent += `  RenderRegistry.register(100, (ctx, tx, ty, x, y, map, def) => {\n`;
+            jsContent += `    if(!def.img) { def.img = new Image(); def.img.src = def.customSrc; }\n`;
+            jsContent += `    if(def.img.complete) ctx.drawImage(def.img, tx, ty, 16, 16);\n`;
+            jsContent += `    else { ctx.fillStyle = '#f0f'; ctx.fillRect(tx, ty, 16, 16); }\n`;
+            jsContent += `  });\n}\n`;
+        }
+        return jsContent;
+    },
+
+    download(content) {
+        const blob = new Blob([content], { type: 'text/javascript' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'rooms.js';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+};
+
+pixelEditor.init();
+app.init();
+
+</script>
+</body>
+</html>
