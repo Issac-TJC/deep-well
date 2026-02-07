@@ -1,0 +1,1719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Depth of the Well - BOSS</title>
+
+    <link rel="stylesheet" href="boss/boss.css">
+    <link rel="stylesheet" href="mobile/mobile.css">
+    
+    <style>
+        body {
+            margin: 0;
+            background-color: #050505;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #444;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none; /* Prevent default touch actions like scroll/zoom */
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+            cursor: none; /* Hide cursor for immersion */
+        }
+
+        canvas {
+            display: block;
+            image-rendering: pixelated; 
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            pointer-events: none;
+            text-shadow: 0 2px 4px black;
+            opacity: 0;
+            transition: opacity 1s;
+            z-index: 20;
+        }
+
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.1) 50%,
+                rgba(0,0,0,0.1)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,20,0.9) 100%);
+            pointer-events: none;
+            z-index: 11;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ui-layer">Initialize...</div>
+        <canvas id="gameCanvas"></canvas>
+        <div class="scanlines"></div>
+        <div class="vignette"></div>
+
+        <!-- Mobile Controls UI -->
+        <div id="mobile-controls">
+            <div id="dpad" class="control-group">
+                <div class="touch-btn" id="btn-up">▲</div>
+                <div class="touch-btn" id="btn-left">◀</div>
+                <div class="touch-btn" id="btn-right">▶</div>
+                <div class="touch-btn" id="btn-down">▼</div>
+            </div>
+            <div id="actions" class="control-group">
+                <div class="touch-btn" id="btn-map">MAP</div>
+                <div class="touch-btn" id="btn-jump">JUMP</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * ============================================================================
+ * 1. CONFIGURATION & UTILS
+ * ============================================================================
+ */
+const GAME_WIDTH = 480;
+const GAME_HEIGHT = 288;
+const TILE_SIZE = 16;
+const SCALE = 2;
+
+const COLORS = {
+    bg: '#090914',
+    tileDark: '#111122',
+    tileLight: '#222238',
+    tileHighlight: '#333355',
+    grass: '#2a2a4a', 
+    grassTip: '#4a4a7a',
+    flowerStem: '#446644',
+    flowerBulbClosed: '#444466',
+    flowerBulbOpen: '#aa88ff',
+    waterBase: 'rgba(20, 40, 100, 0.4)',
+    waterSurface: 'rgba(50, 100, 255, 0.6)',
+    playerCore: '#ffffff',
+    playerGlow: '#aaffaa',
+    hat: '#ffcc00',          
+    hatLight: '#ffeedd',     
+    mapBg: 'rgba(0, 0, 0, 0.85)',
+    mapVisited: '#444466',
+    mapCurrent: '#aaffaa',
+    mapWall: '#666688',   
+    mapWater: '#4444ff',
+    chestClosed: '#d4af37',
+    chestOpen: '#8a6e26',
+    ladder: '#444455',
+    lightBase: '#333344',
+    lightGlow: '#ffeedd',
+    spike: '#666677', 
+    spikeDark: '#444455',
+    // --- NEW: Retro Wood Platform Colors (Lighter, Retro) ---
+    woodDark: '#8d6e63',      // Lighter shadow for retro feel
+    woodLight: '#eecfa1',     // Retro light beige/wood
+    woodDetail: '#a1887f'     // Subtle texture
+};
+
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+
+/**
+ * ============================================================================
+ * 2. DATA
+ * ============================================================================
+ */
+
+</script>
+<script src="data/rooms.js"></script> 
+<script>
+
+/**
+ * ============================================================================
+ * 3. ENGINE SYSTEMS (Input, UI)
+ * ============================================================================
+ */
+
+class InputHandler {
+    constructor() {
+        this.keys = {
+            ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
+            w: false, s: false, a: false, d: false,
+            Space: false, " ": false,
+            Tab: false,
+            "=": false, "+": false, "-": false, "_": false
+        };
+        this.initListeners();
+    }
+
+    initListeners() {
+        window.addEventListener('keydown', e => { 
+            if(this.keys.hasOwnProperty(e.key) || e.key === " ") {
+                if(e.key === "Tab") e.preventDefault();
+                this.keys[e.key] = true;
+            }
+        });
+        window.addEventListener('keyup', e => { 
+            if(this.keys.hasOwnProperty(e.key) || e.key === " ") this.keys[e.key] = false; 
+        });
+    }
+
+    isPressed(key) { return this.keys[key]; }
+    
+    // Abstracted control checks
+    get up() { return this.keys.ArrowUp || this.keys.w; }
+    get down() { return this.keys.ArrowDown || this.keys.s; }
+    get left() { return this.keys.ArrowLeft || this.keys.a; }
+    get right() { return this.keys.ArrowRight || this.keys.d; }
+    get jump() { return this.keys.Space || this.keys[" "]; }
+    get map() { return this.keys.Tab; }
+}
+
+class UIManager {
+    constructor() {
+        this.element = document.getElementById('ui-layer');
+        this.timeout = null;
+    }
+
+    showMessage(text, color = 'rgba(255, 255, 255, 0.7)', duration = 200) {
+        // Prevent flickering if message is same
+        if (this.element.innerText === text && this.element.style.opacity > 0) return;
+        
+        // Don't overwrite system messages immediately
+        if (this.element.innerText.includes("SYSTEM") && !text.includes("SYSTEM")) {
+            if (this.element.style.opacity > 0) return;
+        }
+
+        this.element.innerText = text;
+        this.element.style.color = color;
+        this.element.style.opacity = 1;
+
+        if (this.timeout) clearTimeout(this.timeout);
+        
+        // Auto fade out if duration provided (mostly for non-looping messages)
+        if (duration > 0 && duration < 5000) {
+             this.timeout = setTimeout(() => {
+                 this.element.style.opacity = 0;
+             }, duration);
+        }
+    }
+
+    showSystemMessage(text) {
+        this.element.innerText = `[SYSTEM]: ${text}`;
+        this.element.style.opacity = 1;
+        this.element.style.color = '#aaffaa';
+        if (this.timeout) clearTimeout(this.timeout);
+        this.timeout = setTimeout(() => {
+            this.element.style.opacity = 0;
+            setTimeout(() => this.element.style.color = 'rgba(255, 255, 255, 0.7)', 500);
+        }, 3000);
+    }
+}
+
+/**
+ * ============================================================================
+ * 4. GAME OBJECTS
+ * ============================================================================
+ */
+
+class Particle {
+    constructor(x, y, type = 'dust') {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 0.5;
+        this.vy = (Math.random() - 0.5) * 0.5;
+        this.life = 1.0;
+        this.type = type;
+        
+        if (type === 'splash') {
+            this.vy = -rand(0.5, 2);
+            this.vx = rand(-1, 1);
+            this.life = rand(0.5, 1);
+        } else if (type === 'spark') {
+            this.vx = (Math.random() - 0.5) * 2;
+            this.vy = (Math.random() - 0.5) * 2;
+        } else if (type === 'bubble') {
+            this.vy = -rand(0.5, 2.0);
+            this.vx = rand(-0.5, 0.5);
+            this.life = rand(0.5, 1.0);
+        } else if (type === 'rubble') {
+            this.vx = (Math.random() - 0.5) * 3;
+            this.vy = -rand(1, 3);
+            this.life = rand(0.5, 0.8);
+        }
+    }
+
+    update(timeScale) {
+        this.x += this.vx * timeScale;
+        this.y += this.vy * timeScale;
+        
+        if (this.type === 'dust') {
+            this.life -= 0.005 * timeScale;
+            this.y -= 0.05 * timeScale; 
+        } else if (this.type === 'splash') {
+            this.vy += 0.1 * timeScale; 
+            this.life -= 0.02 * timeScale;
+        } else if (this.type === 'spark') {
+            this.life -= 0.03 * timeScale;
+        } else if (this.type === 'bubble') {
+            this.life -= 0.02 * timeScale;
+            this.vx *= Math.pow(0.95, timeScale);
+        } else if (this.type === 'rubble') {
+            this.life -= 0.02 * timeScale;
+            this.vy += 0.2 * timeScale; // Gravity for rubble
+        }
+    }
+
+    draw(ctx) {
+        if (this.type === 'dust') ctx.fillStyle = `rgba(100, 150, 255, ${Math.max(0, this.life * 0.3)})`;
+        else if (this.type === 'splash') ctx.fillStyle = `rgba(150, 200, 255, ${Math.max(0, this.life)})`;
+        else if (this.type === 'spark') ctx.fillStyle = `rgba(255, 255, 150, ${Math.max(0, this.life)})`;
+        else if (this.type === 'bubble') ctx.fillStyle = `rgba(200, 255, 255, ${Math.max(0, this.life * 0.6)})`;
+        else if (this.type === 'rubble') ctx.fillStyle = `rgba(120, 120, 140, ${Math.max(0, this.life)})`;
+        else ctx.fillStyle = `rgba(255, 255, 200, ${Math.max(0, this.life)})`;
+        ctx.fillRect(this.x, this.y, 1, 1);
+    }
+}
+
+class WallLight {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.baseRadius = 40;
+        this.currentRadius = 40;
+        this.targetRadius = 40;
+    }
+    update(player, timeScale) {
+        const dist = Math.hypot(player.x - (this.x + 8), player.y - (this.y + 8));
+        this.targetRadius = dist < 20 ? 100 : 40;
+        const k = 1 - Math.pow(0.9, timeScale);
+        this.currentRadius += (this.targetRadius - this.currentRadius) * k;
+    }
+    draw(ctx) {
+        ctx.fillStyle = COLORS.lightBase;
+        ctx.fillRect(this.x + 4, this.y + 2, 8, 8);
+        ctx.fillStyle = COLORS.lightGlow;
+        ctx.fillRect(this.x + 6, this.y + 4, 4, 4);
+    }
+}
+
+class Chest {
+    constructor(x, y, roomKey) {
+        this.x = x; this.y = y;
+        this.w = TILE_SIZE; this.h = TILE_SIZE;
+        this.roomKey = roomKey;
+        this.abilityId = ROOM_LOOT[roomKey] || null;
+        this.opened = false;
+        this.glowPhase = 0;
+    }
+    update(game, timeScale) {
+        if (this.opened) return;
+        this.glowPhase += 0.1 * timeScale;
+        const dist = Math.hypot(game.player.x - (this.x + this.w/2), game.player.y - (this.y + this.h/2));
+        if (dist < 15) this.open(game);
+    }
+    open(game) {
+        this.opened = true;
+        if (this.abilityId) {
+            game.system.enable(this.abilityId);
+            game.spawnParticles(this.x + 8, this.y + 8, 20, 'spark');
+        }
+    }
+    draw(ctx) {
+        ctx.fillStyle = this.opened ? COLORS.chestOpen : COLORS.chestClosed;
+        if (this.opened) {
+            ctx.fillRect(this.x + 2, this.y + 6, 12, 10);
+            ctx.fillStyle = '#000'; ctx.fillRect(this.x + 3, this.y + 6, 10, 2); 
+        } else {
+            ctx.fillRect(this.x + 2, this.y + 4, 12, 12);
+            ctx.fillStyle = '#ffaa00'; ctx.fillRect(this.x + 7, this.y + 8, 2, 2);
+            const alpha = 0.2 + Math.sin(this.glowPhase) * 0.1;
+            ctx.strokeStyle = `rgba(255, 255, 170, ${alpha})`;
+            ctx.strokeRect(this.x, this.y, 16, 16);
+        }
+    }
+}
+
+class Blade {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.h = rand(4, 8); 
+        this.angle = rand(-0.2, 0.2); 
+        this.baseAngle = this.angle;
+        this.stiffness = rand(0.1, 0.2);
+    }
+    update(player, timeScale) {
+        const dist = Math.abs(this.x - player.x);
+        const yDist = Math.abs(this.y - (player.y + player.r)); 
+        const time = Date.now() * 0.002;
+        const wind = Math.sin(time + this.x * 0.1) * 0.2;
+        let force = 0;
+        if (dist < (player.r + 8) && yDist < 10) force = (this.x - player.x) > 0 ? 1.5 : -1.5;
+        const target = this.baseAngle + wind + force;
+        const k = 1 - Math.pow(1 - this.stiffness, timeScale);
+        this.angle += (target - this.angle) * k;
+    }
+    draw(ctx) {
+        const tipX = this.x + Math.sin(this.angle) * this.h;
+        const tipY = this.y - Math.cos(this.angle) * this.h;
+        ctx.strokeStyle = COLORS.grass;
+        ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(tipX, tipY); ctx.stroke();
+        ctx.fillStyle = COLORS.grassTip; ctx.fillRect(tipX, tipY, 1, 1);
+    }
+}
+
+class Flower {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.state = 0; this.bloomFactor = 0;
+    }
+    update(game, timeScale) {
+        const dist = Math.hypot(game.player.x - this.x, game.player.y - this.y);
+        if (dist < 30) this.bloomFactor += 0.05 * timeScale;
+        else this.bloomFactor -= 0.02 * timeScale;
+        this.bloomFactor = clamp(this.bloomFactor, 0, 1);
+        
+        if (this.bloomFactor > 0.8 && Math.random() < (0.05 * timeScale)) {
+            game.spawnParticles(this.x, this.y - 10, 1, 'spark');
+        }
+    }
+    draw(ctx) {
+        ctx.fillStyle = COLORS.flowerStem;
+        ctx.fillRect(this.x - 1, this.y, 2, 8);
+        const size = 3 + this.bloomFactor * 2;
+        ctx.fillStyle = this.bloomFactor > 0.5 ? COLORS.flowerBulbOpen : COLORS.flowerBulbClosed;
+        ctx.beginPath(); ctx.arc(this.x, this.y - size, size, 0, Math.PI * 2); ctx.fill();
+        if(this.bloomFactor > 0.1) {
+            ctx.fillStyle = `rgba(170, 136, 255, ${this.bloomFactor})`;
+            ctx.beginPath(); ctx.arc(this.x, this.y - size, 1, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+}
+
+class Player {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        // Record initial spawn point
+        this.respawnX = x;
+        this.respawnY = y;
+        
+        this.r = 5;
+        this.vx = 0; this.vy = 0;
+        this.grounded = false;
+        this.inWater = false;
+        this.wasInWater = false;
+        this.onLadder = false;
+        this.squash = 1; this.stretch = 1;
+        this.jumpHeld = false;
+        this.floatTimer = 0;
+    }
+
+    setRespawn() {
+        this.respawnX = this.x;
+        this.respawnY = this.y;
+    }
+
+    update(game, timeScale) {
+        if(game.renderer.showMap || game.isDead) return;
+
+        const map = game.map;
+        const input = game.input;
+
+        map.checkFalseWalls(this);
+
+        const gravity = 0.25;
+        const centerTile = map.getTile(Math.floor(this.x / TILE_SIZE), Math.floor((this.y + this.r * 0.7) / TILE_SIZE));
+        this.inWater = (centerTile === 2);
+        
+        // Hazard Check (Spikes)
+        this.checkHazards(game, map);
+        if(game.isDead) return;
+
+        const ladderCheck = map.getTile(Math.floor(this.x / TILE_SIZE), Math.floor(this.y / TILE_SIZE));
+        const touchingLadder = (ladderCheck === 4);
+
+        let moveSpeed = 0.8;
+        let frictionX = 0.85; 
+        
+        if (this.inWater) {
+            moveSpeed = 0.4;
+            frictionX = 0.9;
+        }
+
+        if (input.left) this.vx -= moveSpeed * timeScale;
+        if (input.right) this.vx += moveSpeed * timeScale;
+
+        // Ladder Logic
+        if (touchingLadder && !this.inWater) {
+            this.onLadder = true;
+            this.grounded = true;
+            this.vy = 0;
+            this.floatTimer = 0;
+            if (input.up) this.vy = -1.5;
+            if (input.down) this.vy = 1.5;
+            if (input.jump) {
+                if (!this.jumpHeld) {
+                    this.doJump(game, -4.5);
+                    this.onLadder = false;
+                }
+            } else this.jumpHeld = false;
+        } 
+        // Water Logic
+        else if (this.inWater) {
+            this.onLadder = false;
+            this.vy += gravity * timeScale;
+            this.vy -= 0.55 * timeScale;
+            if (input.down) this.vy += 0.6 * timeScale;
+
+            if (input.jump) {
+                this.floatTimer += 1.0 * timeScale;
+                const bonusAccel = Math.min(this.floatTimer * 0.02, 1.5); 
+                this.vy -= (0.10 + bonusAccel) * timeScale;
+                if (Math.floor(this.floatTimer) % 5 === 0) game.spawnParticles(this.x, this.y + this.r, 1, 'bubble');
+                this.stretch = 1.1 + Math.min(this.floatTimer * 0.01, 0.4); 
+                this.squash = 1.0 - Math.min(this.floatTimer * 0.005, 0.2);
+            } else {
+                this.floatTimer = 0;
+            }
+
+            if (this.vy > 0) this.vy *= Math.pow(0.9, timeScale);
+            else this.vy *= Math.pow(0.98, timeScale);
+        } 
+        // Air Logic
+        else {
+            this.onLadder = false;
+            this.floatTimer = 0;
+            if (input.jump) {
+                if (!this.jumpHeld && this.grounded) {
+                    this.doJump(game, -4.5);
+                }
+            } else this.jumpHeld = false;
+            this.vy += gravity * timeScale;
+        }
+
+        this.vx *= Math.pow(frictionX, timeScale);
+        
+        const maxSpeedX = this.inWater ? 1.0 : 1.6;
+        const maxSpeedY = this.inWater ? 6 : 8;
+        if(Math.abs(this.vx) > maxSpeedX) this.vx = maxSpeedX * Math.sign(this.vx);
+        if(this.vy > maxSpeedY) this.vy = maxSpeedY; 
+
+        this.x += this.vx * timeScale;
+        this.handleCollisions(game, map, 'x', timeScale);
+        
+        this.y += this.vy * timeScale;
+        this.grounded = false; 
+        this.handleCollisions(game, map, 'y', timeScale);
+
+        const squashK = 1 - Math.pow(0.9, timeScale);
+        this.squash += (1 - this.squash) * squashK;
+        this.stretch += (1 - this.stretch) * squashK;
+
+        this.checkWaterTransitions(game, centerTile === 2);
+        this.checkRoomTransitions(game);
+    }
+    
+    checkHazards(game, map) {
+        // Simple bounding box check against spike tiles (ID 99)
+        let startX = Math.floor((this.x - this.r) / TILE_SIZE);
+        let endX = Math.floor((this.x + this.r) / TILE_SIZE);
+        let startY = Math.floor((this.y - this.r) / TILE_SIZE);
+        let endY = Math.floor((this.y + this.r) / TILE_SIZE);
+
+        for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+                // Modified Check: Only kill if spike exists and is NOT destroyed
+                if (map.getTile(x, y) === 99 && !map.isSpikeDestroyed(x, y)) {
+                    game.triggerDeath();
+                    return;
+                }
+            }
+        }
+    }
+
+    doJump(game, force) {
+        this.vy = force;
+        this.grounded = false;
+        this.jumpHeld = true;
+        this.stretch = 1.3; this.squash = 0.7;
+        game.spawnParticles(this.x, this.y + this.r, 4, 'dust');
+    }
+
+    checkWaterTransitions(game, currentInWater) {
+        if (!this.wasInWater && currentInWater) {
+            if (this.vy > 1.5) {
+                game.spawnParticles(this.x, this.y, 8, 'splash');
+                this.vy *= 0.5; 
+            }
+        }
+        if (this.wasInWater && !currentInWater) {
+            if (this.vy < -2.5) {
+                game.spawnParticles(this.x, this.y + this.r, 12, 'splash');
+                game.spawnParticles(this.x, this.y + this.r, 5, 'bubble');
+            } else if (this.vy < 0 && this.vy > -1.0) this.vy *= 0.5;
+        }
+        this.wasInWater = currentInWater;
+    }
+
+    // Helper for repetitive room checks
+    attemptSwitch(game, xOff, yOff, newX, newY) {
+        if(game.loadRoom(game.map.roomX + xOff, game.map.roomY + yOff)) {
+            if(newX !== null) this.x = newX;
+            if(newY !== null) this.y = newY;
+            
+            // --- NEW: Record new respawn point on room entry ---
+            this.setRespawn();
+            
+            game.spawnParticles(this.x, this.y, 10, 'dust');
+            return true;
+        }
+        return false;
+    }
+
+    checkRoomTransitions(game) {
+        if (this.x > GAME_WIDTH) {
+            if (this.attemptSwitch(game, 1, 0, this.x - GAME_WIDTH, null)) {} 
+            else { this.x = GAME_WIDTH; this.vx = 0; }
+        } else if (this.x < 0) {
+            if (this.attemptSwitch(game, -1, 0, this.x + GAME_WIDTH, null)) {} 
+            else { this.x = 0; this.vx = 0; }
+        }
+        if (this.y > GAME_HEIGHT) {
+            if (this.attemptSwitch(game, 0, 1, null, this.y - GAME_HEIGHT)) {} 
+            else { this.y += GAME_HEIGHT; this.vy = 0; this.grounded = true; }
+        } else if (this.y < 0) {
+            if (this.attemptSwitch(game, 0, -1, null, GAME_HEIGHT)) {} 
+            else { this.y = 0; this.vy = 0; }
+        }
+    }
+
+    handleCollisions(game, map, axis, timeScale) {
+        let startX = Math.floor((this.x - this.r) / TILE_SIZE);
+        let endX = Math.floor((this.x + this.r) / TILE_SIZE);
+        let startY = Math.floor((this.y - this.r) / TILE_SIZE);
+        let endY = Math.floor((this.y + this.r) / TILE_SIZE);
+
+        for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+                let tile = map.getTile(x, y);
+
+                // --- WOODEN PLATFORM LOGIC (ID: 8) ---
+                if (tile === 8) {
+                    if (axis === 'y' && this.vy >= 0) {
+                        const tileTop = y * TILE_SIZE;
+                        const previousFeetY = (this.y - this.vy * timeScale) + this.r;
+                        const currentFeetY = this.y + this.r;
+
+                        if (previousFeetY <= tileTop + 0.1 && currentFeetY >= tileTop - 0.1) {
+                            this.y = tileTop - this.r - 0.01;
+                            this.grounded = true;
+                            this.vy = 0;
+                            if(this.vy > 2) { this.squash = 1.4; this.stretch = 0.6; }
+                        }
+                    }
+                    continue; // Skip standard wall logic for platforms
+                }
+                // ------------------------------------------
+
+                if (tile === 1 || tile === 10) { 
+                    if (axis === 'x') {
+                        if (this.vx > 0) this.x = x * TILE_SIZE - this.r - 0.01;
+                        if (this.vx < 0) this.x = (x + 1) * TILE_SIZE + this.r + 0.01;
+                        this.vx = 0;
+                    } else {
+                        if (this.vy > 0) {
+                            this.y = y * TILE_SIZE - this.r - 0.01;
+                            this.grounded = true;
+                            if(this.vy > 2) { this.squash = 1.4; this.stretch = 0.6; }
+                        }
+                        if (this.vy < 0) {
+                            this.y = (y + 1) * TILE_SIZE + this.r + 0.01;
+                            
+                            // --- NEW: Improved Spike Destruction Logic ---
+                            map.triggerTileBounce(x, y);
+
+                            // Process stack destruction (search up for spike)
+                            const hasMinerHat = game.system.abilities.minerHat;
+                            map.processSpikeHit(x, y, hasMinerHat, game);
+                            // ------------------------------------
+                        }
+                        this.vy = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.squash, this.stretch);
+        
+        // Player Body
+        ctx.fillStyle = COLORS.playerCore;
+        ctx.beginPath(); ctx.arc(0, 0, this.r, 0, Math.PI*2); ctx.fill();
+
+        // Miner Hat Rendering
+        if (typeof game !== 'undefined' && game.system.abilities.minerHat) {
+            ctx.fillStyle = COLORS.hat;
+            ctx.fillRect(-3, -7, 6, 3); // Hat Base
+            ctx.fillStyle = COLORS.hatLight;
+            ctx.fillRect(0, -7, 2, 2); // Light Bulb
+        }
+
+        ctx.restore();
+    }
+}
+
+class Map {
+    constructor() {
+        this.roomX = 0;
+        this.roomY = 0;
+        this.layout = [];
+        this.rows = 0;
+        this.cols = 0;
+        
+        // Entities are now managed by Map for cleaner main loop
+        this.decor = [];
+        this.grass = [];
+        this.flowers = [];
+        this.chests = [];
+        this.lights = [];
+        this.waterNodes = [];
+        
+        this.visitedRooms = new Set(); 
+        this.explored = {}; 
+        this.visible = [];
+        this.secretRegistry = {};
+
+        // --- Destruction State ---
+        this.globalDestroyedSpikes = new Set(); // Permanent
+        this.temporaryDestroyedSpikes = new Set(); // Recoverable (cleared on room load)
+        
+        // --- NEW: Active Destruction Tracking ---
+        this.activeSpikeKey = null; // Key of the spike currently being mined
+        this.activeHitCount = 0;    // How many times we've hit it consecutively
+        
+        this.bouncingTiles = {}; // { "x,y": offset }
+    }
+
+    load(rx, ry) {
+        const key = `${rx},${ry}`;
+        if (!WORLD_LAYOUTS[key]) return false; 
+
+        // Reset active mining on room switch
+        this.activeSpikeKey = null;
+        this.activeHitCount = 0;
+
+        this.roomX = rx;
+        this.roomY = ry;
+        this.layout = WORLD_LAYOUTS[key];
+        this.rows = this.layout.length;
+        this.cols = this.layout[0].length;
+        this.visitedRooms.add(key);
+
+        if (!this.explored[key]) this.explored[key] = Array(this.rows).fill(0).map(() => Array(this.cols).fill(false));
+        this.visible = Array(this.rows).fill(0).map(() => Array(this.cols).fill(false));
+        if (!this.secretRegistry[key]) this.secretRegistry[key] = new Set();
+
+        // Reset temporary room state
+        this.temporaryDestroyedSpikes.clear(); 
+        this.bouncingTiles = {};
+
+        this.generateEntities(key);
+        return true;
+    }
+
+    // New parsing helper to handle characters
+    getTileValue(val) {
+        if (val === 'x') return 99; // Spike
+        return parseInt(val);
+    }
+
+    generateEntities(roomKey) {
+        this.grass = [];
+        this.flowers = [];
+        this.chests = [];
+        this.lights = [];
+        this.waterNodes = [];
+
+        for (let y = 0; y < this.rows; y++) {
+            for (let x = 0; x < this.cols; x++) {
+                // Use new helper
+                let t = this.getTileValue(this.layout[y][x]);
+                
+                // Decor
+                if ((t === 1 || t === 10) && this.getTile(x, y-1) === 0) {
+                    const count = Math.floor(rand(2, 5)); 
+                    for(let i=0; i<count; i++) this.grass.push(new Blade(x * TILE_SIZE + rand(2, 14), y * TILE_SIZE));
+                    if (Math.random() < 0.3) this.flowers.push(new Flower(x * TILE_SIZE + TILE_SIZE/2, y * TILE_SIZE));
+                }
+                if (t === 2 && this.getTile(x, y-1) === 0) this.waterNodes.push({x: x, y: y});
+                if (t === 3) this.chests.push(new Chest(x * TILE_SIZE, y * TILE_SIZE, roomKey));
+                if (t === 5) this.lights.push(new WallLight(x * TILE_SIZE, y * TILE_SIZE));
+            }
+        }
+    }
+
+    // --- NEW: Spike Logic (Stack Destruction with Combo Reset) ---
+    processSpikeHit(hitX, hitY, permanent, game) {
+        let cx = hitX;
+        let cy = hitY;
+        let crx = this.roomX;
+        let cry = this.roomY;
+        let brickCount = 1; // Start with the brick we just hit (bottom of stack)
+
+        let foundSpike = false;
+        let targetSpikeKey = null;
+
+        // Search UPWARDS (y decreasing)
+        // Max scan distance to prevent infinite loops
+        for(let i=0; i<20; i++) {
+            cy--;
+            
+            // Handle Room Transition Upwards
+            if (cy < 0) {
+                cry--;
+                cy = this.rows - 1; // Wrap to bottom of room above
+            }
+
+            // Access Raw Data for the room being checked
+            const roomKey = `${crx},${cry}`;
+            if (!WORLD_LAYOUTS[roomKey]) break; // No room above, stop search
+            
+            const layout = WORLD_LAYOUTS[roomKey];
+            if (cy >= layout.length || cx >= layout[0].length) break; // Bounds check safety
+
+            const tile = this.getTileValue(layout[cy][cx]);
+
+            // Tile '1' (or '10') are bricks. Accumulate count.
+            if (tile === 1 || tile === 10) {
+                brickCount++;
+            } else if (tile === 99) {
+                // Found a spike!
+                targetSpikeKey = `${crx},${cry},${cx},${cy}`;
+                foundSpike = true;
+                break; // Stop searching after finding the first spike
+            } else {
+                // Found something else (air, water, etc) -> Break connection
+                // Rule: "Accumulate until non-'1' or no room"
+                break; 
+            }
+        }
+
+        if (foundSpike && targetSpikeKey) {
+            // Check if we are continuing the same spike destruction or starting new
+            if (this.activeSpikeKey !== targetSpikeKey) {
+                // We switched targets (or started a new one) -> Reset
+                this.activeSpikeKey = targetSpikeKey;
+                this.activeHitCount = 0;
+            }
+
+            // Don't process if already destroyed
+            if (this.isSpikeDestroyedExplicit(crx, cry, cx, cy)) return;
+
+            this.activeHitCount++;
+
+            // FEEDBACK: Check if destroyed
+            // Rule: Hits needed == Number of bricks in the stack
+            if (this.activeHitCount >= brickCount) {
+                this.destroySpikeExplicit(crx, cry, cx, cy, permanent);
+                
+                // Visuals
+                game.spawnParticles(game.player.x, game.player.y - 20, 15, 'rubble');
+                // Spawn spark at the actual spike location if in current room
+                if (crx === this.roomX && cry === this.roomY) {
+                     game.spawnParticles(cx * TILE_SIZE + 8, cy * TILE_SIZE + 8, 10, 'spark');
+                }
+                
+                // Reset stats after destruction so we don't accidentally carry over to next hit
+                this.activeSpikeKey = null;
+                this.activeHitCount = 0;
+
+            } else {
+                // Feedback that we hit it but it resisted (Shake/Dust)
+                 game.spawnParticles(game.player.x, game.player.y - 20, 3, 'dust');
+            }
+        } else {
+            // We hit a brick, but the scan upward found NO spike (or hit air/water first).
+            // This counts as "hitting another brick" or "encountering non-brick".
+            // We must RESET the combo for any previous spike.
+            this.activeSpikeKey = null;
+            this.activeHitCount = 0;
+        }
+    }
+
+    isSpikeDestroyedExplicit(rx, ry, x, y) {
+        const key = `${rx},${ry},${x},${y}`;
+        return this.globalDestroyedSpikes.has(key) || this.temporaryDestroyedSpikes.has(key);
+    }
+
+    destroySpikeExplicit(rx, ry, x, y, permanent) {
+        const key = `${rx},${ry},${x},${y}`;
+        if (permanent) {
+            this.globalDestroyedSpikes.add(key);
+            this.temporaryDestroyedSpikes.delete(key);
+        } else {
+            this.temporaryDestroyedSpikes.add(key);
+        }
+    }
+    // -------------------------------------------
+
+    isSpikeDestroyed(x, y) {
+        const key = `${this.roomX},${this.roomY},${x},${y}`;
+        return this.globalDestroyedSpikes.has(key) || this.temporaryDestroyedSpikes.has(key);
+    }
+
+    isSpikeDestroyedAt(rx, ry, x, y) {
+        return this.globalDestroyedSpikes.has(`${rx},${ry},${x},${y}`);
+    }
+
+    destroySpike(x, y, permanent = false) {
+        this.destroySpikeExplicit(this.roomX, this.roomY, x, y, permanent);
+    }
+
+    triggerTileBounce(x, y) {
+        this.bouncingTiles[`${x},${y}`] = -4; // Bounce up 4 pixels
+    }
+
+    updateEntities(game, timeScale) {
+        this.grass.forEach(g => g.update(game.player, timeScale));
+        this.flowers.forEach(f => f.update(game, timeScale));
+        this.chests.forEach(c => c.update(game, timeScale));
+        this.lights.forEach(l => l.update(game.player, timeScale));
+        
+        this.chests.forEach(c => {
+            if(c.abilityId && game.system.abilities[c.abilityId]) c.opened = true;
+        });
+
+        for (let key in this.bouncingTiles) {
+            this.bouncingTiles[key] *= Math.pow(0.8, timeScale); // Decay
+            if (Math.abs(this.bouncingTiles[key]) < 0.1) delete this.bouncingTiles[key];
+        }
+    }
+
+    checkFalseWalls(player) {
+        const tx = Math.floor(player.x / TILE_SIZE);
+        const ty = Math.floor(player.y / TILE_SIZE);
+        const key = `${this.roomX},${this.roomY}`;
+
+        if (this.getTile(tx, ty) === 6 && !this.secretRegistry[key].has(`${tx},${ty}`)) {
+            const stack = [[tx, ty]];
+            while(stack.length > 0) {
+                const [cx, cy] = stack.pop();
+                const coordKey = `${cx},${cy}`;
+                if (!this.secretRegistry[key].has(coordKey)) {
+                    this.secretRegistry[key].add(coordKey);
+                    [[0,1], [0,-1], [1,0], [-1,0]].forEach(n => {
+                        const nx = cx + n[0], ny = cy + n[1];
+                        if (this.getTile(nx, ny) === 6) stack.push([nx, ny]);
+                    });
+                }
+            }
+        }
+    }
+
+    updateVisibility(player) {
+        this.visible = Array(this.rows).fill(0).map(() => Array(this.cols).fill(false));
+        const key = `${this.roomX},${this.roomY}`;
+        const roomExplored = this.explored[key]; 
+        const px = Math.floor(player.x / TILE_SIZE);
+        const py = Math.floor(player.y / TILE_SIZE);
+        
+        let queue = [{x: px, y: py}];
+        const markVisible = (x, y) => {
+            if (x >= 0 && x < this.cols && y >= 0 && y < this.rows) {
+                this.visible[y][x] = true;
+                if (roomExplored) roomExplored[y][x] = true;
+            }
+        };
+        markVisible(px, py);
+
+        while (queue.length > 0) {
+            const curr = queue.shift();
+            const neighbors = [{x: curr.x, y: curr.y - 1}, {x: curr.x, y: curr.y + 1}, {x: curr.x - 1, y: curr.y}, {x: curr.x + 1, y: curr.y}];
+
+            for (let n of neighbors) {
+                if (n.x < 0 || n.x >= this.cols || n.y < 0 || n.y >= this.rows) continue;
+                if (this.visible[n.y][n.x]) continue;
+                markVisible(n.x, n.y);
+                
+                const tile = this.getTileValue(this.layout[n.y][n.x]);
+                
+                if (tile === 99 && !this.isSpikeDestroyed(n.x, n.y)) continue;
+
+                if (tile === 1 || tile === 10 || tile === 6) continue;
+                
+                queue.push(n);
+            }
+        }
+    }
+
+    getTile(x, y) {
+        if (x >= 0 && x < this.cols && y >= 0 && y < this.rows) {
+            return this.getTileValue(this.layout[y][x]);
+        }
+        let nx = x, ny = y, rx = this.roomX, ry = this.roomY;
+
+        if (x < 0) { rx--; nx = x + this.cols; } 
+        else if (x >= this.cols) { rx++; nx = x - this.cols; }
+        if (y < 0) { ry--; ny = y + this.rows; } 
+        else if (y >= this.rows) { ry++; ny = y - this.rows; }
+
+        const key = `${rx},${ry}`;
+        const neighborLayout = WORLD_LAYOUTS[key];
+        if (neighborLayout && ny >= 0 && ny < neighborLayout.length && nx >= 0 && nx < neighborLayout[0].length) {
+            return this.getTileValue(neighborLayout[ny][nx]);
+        }
+        return 0; 
+    }
+
+    isRevealed(x, y) {
+        const key = `${this.roomX},${this.roomY}`;
+        return this.secretRegistry[key] && this.secretRegistry[key].has(`${x},${y}`);
+    }
+}
+
+/**
+ * ============================================================================
+ * 5. MAP SCRIPT SYSTEM
+ * ============================================================================
+ */
+
+</script>
+<script src="scripts/script_base.js"></script>
+<script src="boss/boss.js"></script> 
+<script src="boss/boss_visuals.js"></script>
+<script src="scripts/roomscripts.js"></script>
+<script>
+
+/**
+ * ============================================================================
+ * 6. SYSTEM MANAGER
+ * ============================================================================
+ */
+class SystemManager {
+    constructor(ui) {
+        this.ui = ui;
+        this.abilities = { 
+            minimap: true,
+            minerHat: false // New Ability
+        };
+    }
+
+    enable(abilityName) {
+        if (this.abilities.hasOwnProperty(abilityName)) {
+            this.abilities[abilityName] = true;
+            this.ui.showSystemMessage(`${abilityName.toUpperCase()} MODULE INSTALLED`);
+        }
+    }
+}
+
+/**
+ * ============================================================================
+ * 7. RENDERER & LAYERS
+ * ============================================================================
+ */
+
+// --- NEW: Background Layer Class ---
+class BackgroundLayer {
+    constructor() {
+        // Base config for global background elements
+    }
+
+    draw(ctx, game, timeScale) {
+        // 1. Draw Global Decor (Pillars)
+        // This replaces the old GameRenderer.drawDecor()
+        ctx.fillStyle = '#0d0d1a';
+        ctx.fillRect(80, 0, 10, GAME_HEIGHT);
+        ctx.fillRect(220, 0, 15, GAME_HEIGHT);
+        
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        // Stylized pillar cracks/details
+        ctx.moveTo(100, 0); ctx.lineTo(100, 60);
+        ctx.moveTo(110, 0); ctx.lineTo(110, 40);
+        ctx.moveTo(250, 0); ctx.lineTo(250, 90);
+        ctx.stroke();
+
+        // 2. Draw Scripted Backgrounds (e.g., The Owl)
+        if (game.scripts.currentScript && game.scripts.currentScript.drawBackground) {
+            game.scripts.currentScript.drawBackground(ctx, game, timeScale);
+        }
+    }
+}
+// -----------------------------------
+
+class GameRenderer {
+    constructor(canvas, ui) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d', { alpha: false });
+        this.ui = ui;
+        
+        // Configuration
+        this.canvas.width = GAME_WIDTH;
+        this.canvas.height = GAME_HEIGHT;
+        this.canvas.style.width = `${GAME_WIDTH * SCALE}px`;
+        this.canvas.style.height = `${GAME_HEIGHT * SCALE}px`;
+        
+        // Layers
+        this.backgroundLayer = new BackgroundLayer();
+        
+        this.showMap = false;
+        this.mapScale = 3.0;
+        this.mapOffsetX = 0;
+        this.mapOffsetY = 0;
+
+        // Calculate world bounds on init
+        this.worldBounds = this.calculateWorldBounds();
+    }
+
+    calculateWorldBounds() {
+        const keys = Object.keys(WORLD_LAYOUTS);
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        keys.forEach(k => {
+            const [x, y] = k.split(',').map(Number);
+            if(x < minX) minX = x;
+            if(x > maxX) maxX = x;
+            if(y < minY) minY = y;
+            if(y > maxY) maxY = y;
+        });
+        return { minX, maxX, minY, maxY };
+    }
+
+    handleMapInput(game) {
+        const input = game.input;
+        const system = game.system;
+        const map = game.map;
+
+        if (input.keys["Tab"]) {
+            // Toggle Logic moved here from global scope
+            if(!this.tabHeld) {
+                if (system.abilities.minimap) {
+                    this.showMap = !this.showMap;
+                    // Reset to center on player
+                    if(this.showMap) { 
+                        const b = this.worldBounds;
+                        const gridW = (b.maxX - b.minX + 1);
+                        const gridH = (b.maxY - b.minY + 1);
+                        
+                        // Calculate geometric center of the grid
+                        const centerGridX = b.minX + (gridW - 1) / 2;
+                        const centerGridY = b.minY + (gridH - 1) / 2;
+
+                        const pixelSize = this.mapScale;
+                        const roomPixW = 30 * pixelSize; 
+                        const roomPixH = 18 * pixelSize;
+                        const gap = 0 * pixelSize;
+
+                        // Calculate offset to bring player's room to visual center
+                        // Offset = (GridCenter - PlayerPos) * StepSize
+                        this.mapOffsetX = (centerGridX - map.roomX) * (roomPixW + gap);
+                        this.mapOffsetY = (centerGridY - map.roomY) * (roomPixH + gap);
+
+                        // Ensure we respect bounds immediately
+                        this.clampMapCamera(); 
+                    }
+                } else {
+                    this.ui.showSystemMessage("MAP MODULE NOT FOUND");
+                }
+                this.tabHeld = true;
+            }
+        } else {
+            this.tabHeld = false;
+        }
+
+        if (this.showMap) {
+            // Updated Sensitivity
+            const zoomSpeed = 0.05; // Smoother zoom (was 0.2)
+            const panSpeed = 3;     // Smoother pan (was 15)
+
+            if(input.keys["="] || input.keys["+"]) this.mapScale = Math.min(this.mapScale + zoomSpeed, 5.0);
+            if(input.keys["-"] || input.keys["_"]) this.mapScale = Math.max(this.mapScale - zoomSpeed, 0.5); // Allow more zoom out
+
+            if(input.up) this.mapOffsetY += panSpeed;
+            if(input.down) this.mapOffsetY -= panSpeed;
+            if(input.left) this.mapOffsetX += panSpeed;
+            if(input.right) this.mapOffsetX -= panSpeed;
+
+            this.clampMapCamera();
+        }
+    }
+
+    clampMapCamera() {
+        // Clamp logic to ensure we don't pan too far away
+        const b = this.worldBounds;
+        const gridW = (b.maxX - b.minX + 1);
+        const gridH = (b.maxY - b.minY + 1);
+        const pixelSize = this.mapScale;
+        const roomPixW = 30 * pixelSize; 
+        const roomPixH = 18 * pixelSize;
+        const gap = 0 * pixelSize;
+        
+        const totalMapW = gridW * roomPixW + (gridW - 1) * gap;
+        const totalMapH = gridH * roomPixH + (gridH - 1) * gap;
+        
+        const viewportW = 400;
+        const viewportH = 240;
+
+        // If map is smaller than viewport, lock to center (offset 0)
+        // If larger, allow panning up to edge
+        
+        let maxOffX = 0;
+        let maxOffY = 0;
+
+        if (totalMapW > viewportW) {
+            maxOffX = (totalMapW - viewportW) / 2;
+        }
+        if (totalMapH > viewportH) {
+            maxOffY = (totalMapH - viewportH) / 2;
+        }
+
+        this.mapOffsetX = clamp(this.mapOffsetX, -maxOffX, maxOffX);
+        this.mapOffsetY = clamp(this.mapOffsetY, -maxOffY, maxOffY);
+    }
+
+    draw(game, accumulatedTime, timeScale) {
+        // 1. CLEAR
+        this.ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        this.ctx.fillStyle = COLORS.bg;
+        this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+        // 2. BACKGROUND LAYER
+        // Draw the full background first (Optimization: simple z-ordering)
+        this.backgroundLayer.draw(this.ctx, game);
+
+        // 3. FOG OVERLAY (Masking Background)
+        // Any tile that is NOT visible should draw the background color over the background layer
+        // This creates the effect that background elements fade into the darkness
+        this.drawFog(game.map);
+
+        // 4. MAIN LAYER (Walls, Tiles, Objects)
+        // Only draws visible tiles, naturally covering the background layer
+        this.drawMapTiles(game.map, accumulatedTime);
+        
+        // 5. ENTITY LAYER
+        game.player.draw(this.ctx);
+        this.drawParticles(game);
+        this.drawLighting(game);
+
+        // 6. BOSS/FOREGROUND SCRIPT LAYER
+        if (game.scripts.currentScript && game.scripts.currentScript.drawForeground) {
+            game.scripts.currentScript.drawForeground(this.ctx, game, timeScale);
+        }
+        
+        // 7. POST-PROCESSING (Mosaic/Death)
+        this.drawPostEffects(game);
+
+        // 8. UI/MAP
+        if(this.showMap) this.drawMinimap(game);
+    }
+
+    // --- NEW: Fog Logic ---
+    drawFog(map) {
+        // We only need to "erase" the background where we can't see
+        // Since we can't actually erase to transparent (body is black), we draw the BG color
+        this.ctx.fillStyle = COLORS.bg;
+        for (let y = 0; y < map.rows; y++) {
+            for (let x = 0; x < map.cols; x++) {
+                if (!map.visible || !map.visible[y][x]) {
+                    this.ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            }
+        }
+    }
+    // ----------------------
+
+    drawPostEffects(game) {
+        if (game.isDead || game.recoveryTimer > 0) {
+            let mosaicFactor = 0;
+            
+            if (game.isDead) {
+                // Ramp up mosaic
+                mosaicFactor = Math.min(1, game.deathTimer / 1000);
+            } else {
+                // Ramp down mosaic (Recovery)
+                mosaicFactor = Math.max(0, game.recoveryTimer / 1000);
+            }
+
+            if (mosaicFactor > 0) {
+                const mosaicLevel = Math.max(1, Math.floor(mosaicFactor * 20));
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                
+                this.ctx.imageSmoothingEnabled = false;
+                
+                // Downsample then Upsample for pixelation effect
+                this.ctx.drawImage(this.canvas, 0, 0, w, h, 0, 0, w / mosaicLevel, h / mosaicLevel);
+                this.ctx.drawImage(this.canvas, 0, 0, w / mosaicLevel, h / mosaicLevel, 0, 0, w, h);
+                
+                // Red tint fading with mosaic
+                this.ctx.fillStyle = `rgba(50, 0, 0, ${mosaicFactor * 0.5})`;
+                this.ctx.fillRect(0, 0, w, h);
+            }
+        }
+    }
+
+    drawMapTiles(map, accumulatedTime) {
+        // Draw Tiles
+        for (let y = 0; y < map.rows; y++) {
+            for (let x = 0; x < map.cols; x++) {
+                if (!map.visible || !map.visible[y][x]) continue;
+
+                let t = map.getTileValue(map.layout[y][x]);
+                let tx = x * TILE_SIZE;
+                let ty = y * TILE_SIZE;
+                
+                // --- NEW: Apply Bounce Offset ---
+                let bounceOff = map.bouncingTiles[`${x},${y}`] || 0;
+                
+                if (t === 1 || t === 10 || t === 6) {
+                    this.ctx.save();
+                    
+                    // Apply translation for bounce animation
+                    if (bounceOff !== 0) this.ctx.translate(0, bounceOff);
+
+                    if (t === 6 && map.isRevealed(x, y)) this.ctx.globalAlpha = 0.4;
+
+                    this.ctx.fillStyle = COLORS.tileDark;
+                    this.ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+                    
+                    if ((x + y) % 2 === 0) {
+                         this.ctx.fillStyle = COLORS.tileLight;
+                         this.ctx.fillRect(tx + 2, ty + 2, 4, 4);
+                         this.ctx.fillRect(tx + 8, ty + 8, 2, 2);
+                         this.ctx.fillRect(tx + 12, ty + 4, 2, 2);
+                    }
+
+                    this.ctx.fillStyle = COLORS.tileHighlight;
+                    const edgeW = 2;
+                    const isRegionInside = (nx, ny) => {
+                        if (nx < 0 || nx >= map.cols || ny < 0 || ny >= map.rows) return false;
+                        if (!map.visible[ny][nx]) return false;
+                        const nt = map.getTileValue(map.layout[ny][nx]);
+                        return (nt !== 1 && nt !== 10 && nt !== 6);
+                    };
+
+                    if (isRegionInside(x, y - 1)) this.ctx.fillRect(tx, ty, TILE_SIZE, edgeW);
+                    if (isRegionInside(x, y + 1)) this.ctx.fillRect(tx, ty + TILE_SIZE - edgeW, TILE_SIZE, edgeW);
+                    if (isRegionInside(x - 1, y)) this.ctx.fillRect(tx, ty, edgeW, TILE_SIZE);
+                    if (isRegionInside(x + 1, y)) this.ctx.fillRect(tx + TILE_SIZE - edgeW, ty, edgeW, TILE_SIZE);
+                    
+                    this.ctx.restore();
+                } 
+                else if (t === 2) {
+                    this.ctx.fillStyle = COLORS.waterBase;
+                    this.ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+                }
+                else if (t === 4) {
+                    this.ctx.fillStyle = COLORS.ladder;
+                    this.ctx.fillRect(tx + 4, ty, 2, TILE_SIZE);
+                    this.ctx.fillRect(tx + 10, ty, 2, TILE_SIZE);
+                    for(let i=2; i<TILE_SIZE; i+=5) this.ctx.fillRect(tx + 4, ty + i, 8, 1);
+                }
+                else if (t === 8) { // --- NEW: WOODEN PLATFORM (Refined Retro Style) ---
+                    const plankHeight = 4;
+                    const seed = (x * 37 + y * 13) % 100;
+
+                    // Main plank with new lighter retro wood color
+                    this.ctx.fillStyle = COLORS.woodLight;
+                    this.ctx.fillRect(tx, ty, TILE_SIZE, plankHeight);
+                    
+                    // Wood Grain Texture (Pixels) using woodDetail
+                    this.ctx.fillStyle = COLORS.woodDetail;
+                    if(seed % 3 === 0) this.ctx.fillRect(tx + 2, ty + 1, 3, 1);
+                    if(seed % 2 === 0) this.ctx.fillRect(tx + 8, ty + 2, 4, 1);
+                    if(seed % 4 === 0) this.ctx.fillRect(tx + 13, ty + 1, 2, 1);
+
+                    // Check neighbors
+                    const leftT = map.getTile(x - 1, y);
+                    const rightT = map.getTile(x + 1, y);
+
+                    // Supports - New Style: Thin Diagonal Struts
+                    this.ctx.fillStyle = COLORS.woodDark;
+                    
+                    if (leftT === 1 || leftT === 10) {
+                        // Left Support: Simple diagonal pixels (pixel art line)
+                        this.ctx.fillRect(tx, ty + plankHeight, 1, 1);
+                        this.ctx.fillRect(tx + 1, ty + plankHeight + 1, 1, 1);
+                        this.ctx.fillRect(tx + 2, ty + plankHeight + 2, 1, 1);
+                        this.ctx.fillRect(tx + 3, ty + plankHeight + 3, 1, 1);
+                    }
+                    
+                    if (rightT === 1 || rightT === 10) {
+                        // Right Support: Mirrored diagonal pixels
+                        this.ctx.fillRect(tx + 15, ty + plankHeight, 1, 1);
+                        this.ctx.fillRect(tx + 14, ty + plankHeight + 1, 1, 1);
+                        this.ctx.fillRect(tx + 13, ty + plankHeight + 2, 1, 1);
+                        this.ctx.fillRect(tx + 12, ty + plankHeight + 3, 1, 1);
+                    }
+                }
+                else if (t === 99) { // Spike - Jagged Rocks
+                    
+                    // --- NEW: Check if destroyed (Recoverable or Permanent) ---
+                    if (map.isSpikeDestroyed(x, y)) continue;
+                    
+                    this.ctx.fillStyle = COLORS.spike;
+                    
+                    // Generate pseudo-randomness based on position for stability
+                    const seed = (x * 37 + y * 13) % 100;
+                    
+                    // Draw 3 sharp rocky shards per tile
+                    this.ctx.beginPath();
+                    
+                    // Shard 1 (Main, tall)
+                    this.ctx.moveTo(tx + 2, ty + TILE_SIZE);
+                    this.ctx.lineTo(tx + 4 + (seed % 4), ty + 2 + (seed % 6)); 
+                    this.ctx.lineTo(tx + 10, ty + TILE_SIZE);
+                    
+                    // Shard 2 (Right, smaller)
+                    this.ctx.lineTo(tx + 14, ty + TILE_SIZE);
+                    this.ctx.lineTo(tx + 12, ty + 6 + (seed % 4));
+                    this.ctx.lineTo(tx + 8, ty + TILE_SIZE);
+                    
+                    // Shard 3 (Left, smaller, overlapping)
+                    this.ctx.moveTo(tx, ty + TILE_SIZE);
+                    this.ctx.lineTo(tx + 2, ty + 8 + (seed % 3));
+                    this.ctx.lineTo(tx + 5, ty + TILE_SIZE);
+
+                    this.ctx.fill();
+
+                    // Darker shading for depth
+                    this.ctx.fillStyle = COLORS.spikeDark;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(tx + 4 + (seed % 4), ty + 2 + (seed % 6));
+                    this.ctx.lineTo(tx + 5 + (seed % 4), ty + TILE_SIZE); // Shadow line down
+                    this.ctx.lineTo(tx + 3 + (seed % 4), ty + TILE_SIZE);
+                    this.ctx.fill();
+                }
+            }
+        }
+
+        // Draw Water Surface
+        this.ctx.fillStyle = COLORS.waterSurface;
+        this.ctx.beginPath();
+        map.waterNodes.forEach(node => {
+            if (map.visible && map.visible[node.y][node.x]) {
+                let wx = node.x * TILE_SIZE;
+                let wy = node.y * TILE_SIZE + 4;
+                for(let i=0; i<=TILE_SIZE; i+=4) {
+                    let h = Math.sin(accumulatedTime * 0.005 + node.x + i * 0.2) * 2;
+                    this.ctx.rect(wx + i, wy + h, 4, 2);
+                }
+            }
+        });
+        this.ctx.fill();
+
+        // Draw Entities
+        const isVisible = (obj) => {
+            const tx = Math.floor(obj.x / TILE_SIZE);
+            const ty = Math.floor(obj.y / TILE_SIZE);
+            return map.visible && map.visible[ty] && map.visible[ty][tx];
+        };
+        map.lights.forEach(l => { if (isVisible(l)) l.draw(this.ctx); }); 
+        map.flowers.forEach(f => { if (isVisible(f)) f.draw(this.ctx); });
+        map.grass.forEach(g => { if (isVisible(g)) g.draw(this.ctx); }); 
+        map.chests.forEach(c => { if (isVisible(c)) c.draw(this.ctx); });
+    }
+
+    drawParticles(game) {
+        game.particles.forEach(p => {
+            const tx = Math.floor(p.x / TILE_SIZE);
+            const ty = Math.floor(p.y / TILE_SIZE);
+            if (game.map.visible && game.map.visible[ty] && game.map.visible[ty][tx]) {
+                p.draw(this.ctx);
+            }
+        });
+    }
+
+    drawLighting(game) {
+        if (game.isDead) return; // Skip complex lighting on death for performance/effect clarity
+
+        this.ctx.fillStyle = 'rgba(5, 5, 10, 0.3)';
+        this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        this.ctx.globalCompositeOperation = 'lighter';
+
+        // Player
+        let g = this.ctx.createRadialGradient(game.player.x, game.player.y, 2, game.player.x, game.player.y, 40);
+        g.addColorStop(0, 'rgba(100, 255, 150, 0.3)');
+        g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        this.ctx.fillStyle = g;
+        this.ctx.beginPath(); this.ctx.arc(game.player.x, game.player.y, 40, 0, Math.PI*2); this.ctx.fill();
+
+        // Wall Lights
+        game.map.lights.forEach(l => {
+            const tx = Math.floor(l.x / TILE_SIZE);
+            const ty = Math.floor(l.y / TILE_SIZE);
+            if (game.map.visible && game.map.visible[ty] && game.map.visible[ty][tx]) {
+                let lg = this.ctx.createRadialGradient(l.x+8, l.y+8, 2, l.x+8, l.y+8, l.currentRadius);
+                lg.addColorStop(0, 'rgba(255, 220, 180, 0.4)');
+                lg.addColorStop(1, 'rgba(0,0,0,0)');
+                this.ctx.fillStyle = lg;
+                this.ctx.beginPath(); this.ctx.arc(l.x+8, l.y+8, l.currentRadius, 0, Math.PI*2); this.ctx.fill();
+            }
+        });
+
+        // Flowers
+        game.map.flowers.forEach(f => {
+            const tx = Math.floor(f.x / TILE_SIZE);
+            const ty = Math.floor(f.y / TILE_SIZE);
+            if(f.bloomFactor > 0.1 && game.map.visible && game.map.visible[ty] && game.map.visible[ty][tx]) {
+                let fg = this.ctx.createRadialGradient(f.x, f.y-5, 1, f.x, f.y-5, 20 * f.bloomFactor);
+                fg.addColorStop(0, `rgba(180, 100, 255, ${f.bloomFactor * 0.5})`);
+                fg.addColorStop(1, 'rgba(0,0,0,0)');
+                this.ctx.fillStyle = fg;
+                this.ctx.beginPath(); this.ctx.arc(f.x, f.y-5, 30, 0, Math.PI*2); this.ctx.fill();
+            }
+        });
+
+        this.ctx.globalCompositeOperation = 'source-over';
+    }
+
+    drawMinimap(game) {
+        const map = game.map;
+        const b = this.worldBounds;
+
+        this.ctx.fillStyle = COLORS.mapBg;
+        const mapW = 400; const mapH = 240;
+        const mapX = (GAME_WIDTH - mapW) / 2;
+        const mapY = (GAME_HEIGHT - mapH) / 2;
+        
+        // Draw background container
+        this.ctx.fillRect(mapX, mapY, mapW, mapH);
+        
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.rect(mapX, mapY, mapW, mapH);
+        this.ctx.clip();
+
+        this.ctx.fillStyle = "#fff";
+        this.ctx.font = "10px monospace";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText(`SYSTEM MAP [+/- Zoom] [Arrows Pan]`, GAME_WIDTH/2, mapY + 15);
+        this.ctx.textAlign = "left"; 
+
+        const pixelSize = this.mapScale; 
+        const roomPixW = 30 * pixelSize; 
+        const roomPixH = 18 * pixelSize;
+        const gap = 0 * pixelSize; 
+
+        // Layout Geometry
+        const gridW = (b.maxX - b.minX + 1);
+        const gridH = (b.maxY - b.minY + 1);
+
+        const viewCX = mapX + mapW/2;
+        const viewCY = mapY + mapH/2;
+
+        // Iterate entire map bounds
+        for(let rY = b.minY; rY <= b.maxY; rY++) {
+            for(let rX = b.minX; rX <= b.maxX; rX++) {
+                const key = `${rX},${rY}`;
+                
+                // Calculate position relative to map center, then apply offset and view center
+                const distX = rX - (b.minX + (gridW - 1)/2); 
+                const distY = rY - (b.minY + (gridH - 1)/2);
+                
+                const dx = viewCX + this.mapOffsetX + distX * (roomPixW + gap) - (roomPixW/2);
+                const dy = viewCY + this.mapOffsetY + distY * (roomPixH + gap) - (roomPixH/2);
+
+                // Optimization: Skip drawing if offscreen
+                if (dx + roomPixW < mapX || dx > mapX + mapW || dy + roomPixH < mapY || dy > mapY + mapH) continue;
+
+                if (map.explored[key]) {
+                    const layout = WORLD_LAYOUTS[key];
+                    const exploredData = map.explored[key];
+                    const baseColor = (rX === 0 && rY === 0) ? '#222233' : '#111116';
+
+                    if (layout) {
+                        // Background for room
+                        this.ctx.fillStyle = baseColor;
+                        this.ctx.fillRect(dx, dy, roomPixW, roomPixH);
+
+                        for (let r = 0; r < layout.length; r++) {     
+                            for (let c = 0; c < layout[r].length; c++) { 
+                                if (exploredData[r][c]) {
+                                    const tile = map.getTileValue(layout[r][c]);
+                                    if (tile !== 0) {
+                                        const isFalseWall = tile === 6;
+                                        const isSecretRevealed = map.secretRegistry[key] && map.secretRegistry[key].has(`${c},${r}`);
+
+                                        if (tile === 1 || tile === 10 || (isFalseWall && !isSecretRevealed)) this.ctx.fillStyle = COLORS.mapWall;
+                                        else if (tile === 2) this.ctx.fillStyle = COLORS.mapWater;
+                                        else if (tile === 3) this.ctx.fillStyle = COLORS.chestClosed;
+                                        else if (tile === 4) this.ctx.fillStyle = COLORS.ladder;
+                                        else if (tile === 5) this.ctx.fillStyle = COLORS.lightGlow;
+                                        else if (tile === 8) this.ctx.fillStyle = COLORS.woodDark; // Minimap color for wood
+                                        else if (tile === 99) {
+                                            // CHANGED: Only removed from minimap if PERMANENTLY destroyed
+                                            if (map.isSpikeDestroyedAt(rX, rY, c, r)) continue; 
+                                            this.ctx.fillStyle = "#ff0000"; // Red for spike on map
+                                        }
+                                        else continue;
+                                        this.ctx.fillRect(dx + c * pixelSize, dy + r * pixelSize, pixelSize, pixelSize);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (rX === map.roomX && rY === map.roomY) {
+                        this.ctx.strokeStyle = COLORS.playerGlow;
+                        this.ctx.lineWidth = 1;
+                        this.ctx.strokeRect(dx - 1, dy - 1, roomPixW + 2, roomPixH + 2);
+                        const px = (game.player.x / TILE_SIZE) * pixelSize;
+                        const py = (game.player.y / TILE_SIZE) * pixelSize;
+                        this.ctx.fillStyle = '#fff';
+                        this.ctx.fillRect(dx + px, dy + py, 2, 2);
+                    }
+                } 
+            }
+        }
+        this.ctx.restore();
+    }
+}
+
+/**
+ * ============================================================================
+ * 8. GAME CORE
+ * ============================================================================
+ */
+class Game {
+    constructor() {
+        this.input = new InputHandler();
+        this.ui = new UIManager();
+        this.system = new SystemManager(this.ui);
+        this.renderer = new GameRenderer(document.getElementById('gameCanvas'), this.ui);
+        this.scripts = new ScriptManager();
+        
+        this.map = new Map();
+        this.player = new Player(900, 890); // Starting Position
+        this.particles = [];
+        
+        this.isDead = false;
+        this.deathTimer = 0;
+        this.recoveryTimer = 0; // New Timer for fade-in effect
+
+        this.lastTime = 0;
+        this.accumulatedTime = 0;
+        
+        // Initial Room Load
+        this.loadRoom(0, 0);
+    }
+
+    loadRoom(rx, ry) {
+        if(this.map.load(rx, ry)) {
+            // Trigger Script Manager
+            this.scripts.onRoomEnter(this, rx, ry);
+            return true;
+        }
+        return false;
+    }
+
+    spawnParticles(x, y, count, type) {
+        for(let i=0; i<count; i++) this.particles.push(new Particle(x, y, type));
+    }
+
+    triggerDeath() {
+        if (this.isDead) return;
+        this.isDead = true;
+        this.deathTimer = 0;
+        this.recoveryTimer = 0;
+        this.spawnParticles(this.player.x, this.player.y, 20, 'spark');
+    }
+
+    respawn() {
+        this.isDead = false;
+        this.recoveryTimer = 1000; // Start recovery effect (1 second)
+        this.player.x = this.player.respawnX;
+        this.player.y = this.player.respawnY;
+        this.player.vx = 0;
+        this.player.vy = 0;
+        this.map.temporaryDestroyedSpikes.clear(); // Reset temporary spikes on death
+        this.spawnParticles(this.player.x, this.player.y, 10, 'dust');
+    }
+
+    loop(timestamp) {
+        if (!this.lastTime) this.lastTime = timestamp;
+        const deltaTime = timestamp - this.lastTime;
+        this.lastTime = timestamp;
+        const TARGET_FPS = 60;
+        const timeScale = Math.min(deltaTime / (1000 / TARGET_FPS), 4.0);
+        this.accumulatedTime += deltaTime;
+
+        // Input -> UI
+        this.renderer.handleMapInput(this);
+
+        if (this.isDead) {
+            this.deathTimer += deltaTime;
+            if (this.deathTimer > 1000) { // Slightly faster death animation
+                this.respawn();
+            }
+        } else {
+            // Handle Recovery Fade
+            if (this.recoveryTimer > 0) {
+                this.recoveryTimer -= deltaTime;
+                if(this.recoveryTimer < 0) this.recoveryTimer = 0;
+            }
+
+            // Update Logic
+            this.player.update(this, timeScale);
+            this.map.updateEntities(this, timeScale);
+            this.map.updateVisibility(this.player);
+            this.scripts.update(this, timeScale); // Run current room's script
+            
+            if(Math.random() < (0.1 * timeScale)) this.spawnParticles(rand(0, GAME_WIDTH), rand(0, GAME_HEIGHT), 1, 'dust');
+        }
+
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            this.particles[i].update(timeScale);
+            if (this.particles[i].life <= 0) this.particles.splice(i, 1);
+        }
+
+        // Draw
+        this.renderer.draw(this, this.accumulatedTime, timeScale);
+
+        requestAnimationFrame((t) => game.loop(t));
+    }
+}
+
+// Start Game
+const game = new Game();
+requestAnimationFrame((t) => game.loop(t));
+
+</script>
+
+<!--mobile-->
+<script src="mobile/mobile.js"></script>
+
+</body>
+</html>

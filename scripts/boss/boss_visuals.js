@@ -76,7 +76,7 @@ class BossRenderer {
     }
 
     // 绘制弹幕/冲击波
-    drawProjectiles(ctx, projectiles) {
+    drawProjectiles(ctx, projectiles, timeScale) {
         ctx.fillStyle = '#ffaa00';
         projectiles.forEach(p => {
             ctx.beginPath();

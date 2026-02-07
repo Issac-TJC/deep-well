@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Depth of the Well - BOSS (Modular Architecture)</title>
 
-    <link rel="stylesheet" href="scripts/boss/boss.css">
+    <link rel="stylesheet" href="boss/boss.css">
     <link rel="stylesheet" href="mobile/mobile.css">
-
+    
     <style>
         body {
             margin: 0;
@@ -101,20 +101,11 @@
         </div>
     </div>
 
-<!-- Room Design -->
+<!-- External Data (Keep these as they were) -->
 <script src="data/rooms.js"></script> 
-<script src="data/room_ability.js"></script>
-<script src="data/params.js"></script>
-<script src="data/events.js"></script>
-<script src="data/tile.js"></script>
-
-<!-- Rendering Engine Scripts -->
-<script src="render/renderer.js"></script>
-
-<!-- Core Engine Scripts -->
 <script src="scripts/script_base.js"></script>
-<script src="scripts/boss/boss.js"></script> 
-<script src="scripts/boss/boss_visuals.js"></script>
+<script src="boss/boss.js"></script> 
+<script src="boss/boss_visuals.js"></script>
 <script src="scripts/roomscripts.js"></script>
 
 <!-- 
@@ -125,6 +116,521 @@
 -->
 
 <script>
+
+/**
+ * ============================================================================
+ * MODULE: CORE & UTILS (core.js)
+ * Basic utilities, constants, and the Event Bus.
+ * ============================================================================
+ */
+const GAME_WIDTH = 480;
+const GAME_HEIGHT = 288;
+const TILE_SIZE = 16;
+const SCALE = 2;
+
+const COLORS = {
+    bg: '#090914',
+    tileDark: '#111122',
+    tileLight: '#222238',
+    tileHighlight: '#333355',
+    grass: '#2a2a4a', 
+    grassTip: '#4a4a7a',
+    flowerStem: '#446644',
+    flowerBulbClosed: '#444466',
+    flowerBulbOpen: '#aa88ff',
+    waterBase: 'rgba(20, 40, 100, 0.4)',
+    waterSurface: 'rgba(50, 100, 255, 0.6)',
+    playerCore: '#ffffff',
+    playerGlow: '#aaffaa',
+    hat: '#ffcc00',          
+    hatLight: '#ffeedd',     
+    mapBg: 'rgba(0, 0, 0, 0.85)',
+    mapVisited: '#444466',
+    mapCurrent: '#aaffaa',
+    mapWall: '#666688',   
+    mapWater: '#4444ff',
+    chestClosed: '#d4af37',
+    chestOpen: '#8a6e26',
+    ladder: '#444455',
+    lightBase: '#333344',
+    lightGlow: '#ffeedd',
+    spike: '#666677', 
+    spikeDark: '#444455',
+    woodDark: '#2a1e19',   
+    woodLight: '#4e3b31',  
+    woodDetail: '#3a2a24'  
+};
+
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+
+// --- Event Bus (Decoupling Mechanism) ---
+class EventBus {
+    constructor() { this.listeners = {}; }
+    
+    on(event, callback) {
+        if (!this.listeners[event]) this.listeners[event] = [];
+        this.listeners[event].push(callback);
+    }
+    
+    emit(event, data) {
+        if (this.listeners[event]) {
+            this.listeners[event].forEach(cb => cb(data));
+        }
+    }
+}
+const events = new EventBus(); // Global singleton for the game
+
+/**
+ * ============================================================================
+ * MODULE: REGISTRY (registry.js)
+ * Tile definitions and configurations.
+ * ============================================================================
+ */
+const COLLISION_TYPE = {
+    NONE: 0, SOLID: 1, ONE_WAY: 2, LIQUID: 3, CLIMBABLE: 4, HAZARD: 5
+};
+
+const RENDER_STYLE = {
+    INVISIBLE: 0, BLOCK_BASIC: 1, LIQUID: 2, LADDER: 3, 
+    PLATFORM_WOOD: 4, SPIKE_ROCK: 5, OBJECT_MARKER: 6
+};
+
+const TILE_DEF = {
+    0:  { name: "Air",           col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.INVISIBLE,    isVoid: true },
+    1:  { name: "Dirt",          col: COLLISION_TYPE.SOLID,     ren: RENDER_STYLE.BLOCK_BASIC },
+    2:  { name: "Water",         col: COLLISION_TYPE.LIQUID,    ren: RENDER_STYLE.LIQUID,       friction: 0.9, gravityMod: 0.5, isVoid: true },
+    3:  { name: "ChestNode",     col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.OBJECT_MARKER, isVoid: true },
+    4:  { name: "Ladder",        col: COLLISION_TYPE.CLIMBABLE, ren: RENDER_STYLE.LADDER,       isVoid: true },
+    5:  { name: "LightNode",     col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.OBJECT_MARKER, isVoid: true },
+    6:  { name: "SecretWall",    col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.BLOCK_BASIC,  isSecret: true }, 
+    8:  { name: "WoodPlatform",  col: COLLISION_TYPE.ONE_WAY,   ren: RENDER_STYLE.PLATFORM_WOOD, isVoid: true },
+    10: { name: "DirtAlt",       col: COLLISION_TYPE.SOLID,     ren: RENDER_STYLE.BLOCK_BASIC },
+    99: { name: "Spike",         col: COLLISION_TYPE.HAZARD,    ren: RENDER_STYLE.SPIKE_ROCK,   damage: 100, isVoid: true }
+};
+
+function getTileDef(id) { return TILE_DEF[id] || TILE_DEF[0]; }
+
+/**
+ * ============================================================================
+ * MODULE: RENDER STRATEGIES (strategies.js)
+ * The visual implementation for each tile type.
+ * ============================================================================
+ */
+const RenderRegistry = {
+    strategies: {},
+    register: function(id, fn) { this.strategies[id] = fn; },
+    get: function(id) { return this.strategies[id]; }
+};
+
+// 1. Basic Block (Walls, Dirt, Secret Walls)
+RenderRegistry.register(RENDER_STYLE.BLOCK_BASIC, (ctx, tx, ty, x, y, map, def) => {
+    ctx.save();
+    const bounceOff = map.bouncingTiles[`${x},${y}`] || 0;
+    if (bounceOff !== 0) ctx.translate(0, bounceOff);
+    if (def.isSecret && map.isRevealed(x, y)) ctx.globalAlpha = 0.4;
+
+    ctx.fillStyle = COLORS.tileDark;
+    ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+    
+    // Add texture details
+    if ((x + y) % 2 === 0) {
+        ctx.fillStyle = COLORS.tileLight;
+        ctx.fillRect(tx + 2, ty + 2, 4, 4);
+        ctx.fillRect(tx + 8, ty + 8, 2, 2);
+        ctx.fillRect(tx + 12, ty + 4, 2, 2);
+    }
+
+    // Draw borders (Void edges)
+    ctx.fillStyle = COLORS.tileHighlight;
+    const edgeW = 2;
+    const isRegionInside = (nx, ny) => {
+        if (nx < 0 || nx >= map.cols || ny < 0 || ny >= map.rows) return false;
+        if (!map.visible[ny][nx]) return false;
+        const ntDef = getTileDef(map.layout[ny][nx]);
+        // Only draw edge if neighbor is VOID (air/water) and NOT secret (looks solid)
+        return ntDef.isVoid && !ntDef.isSecret;
+    };
+
+    if (isRegionInside(x, y - 1)) ctx.fillRect(tx, ty, TILE_SIZE, edgeW);
+    if (isRegionInside(x, y + 1)) ctx.fillRect(tx, ty + TILE_SIZE - edgeW, TILE_SIZE, edgeW);
+    if (isRegionInside(x - 1, y)) ctx.fillRect(tx, ty, edgeW, TILE_SIZE);
+    if (isRegionInside(x + 1, y)) ctx.fillRect(tx + TILE_SIZE - edgeW, ty, edgeW, TILE_SIZE);
+    ctx.restore();
+});
+
+// 2. Liquid (Water)
+RenderRegistry.register(RENDER_STYLE.LIQUID, (ctx, tx, ty) => {
+    ctx.fillStyle = COLORS.waterBase;
+    ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+});
+
+// 3. Ladder
+RenderRegistry.register(RENDER_STYLE.LADDER, (ctx, tx, ty) => {
+    ctx.fillStyle = COLORS.ladder;
+    ctx.fillRect(tx + 4, ty, 2, TILE_SIZE);
+    ctx.fillRect(tx + 10, ty, 2, TILE_SIZE);
+    for(let i=2; i<TILE_SIZE; i+=5) ctx.fillRect(tx + 4, ty + i, 8, 1);
+});
+
+// 4. Wood Platform (One-way)
+RenderRegistry.register(RENDER_STYLE.PLATFORM_WOOD, (ctx, tx, ty, x, y, map) => {
+    ctx.fillStyle = COLORS.woodLight; 
+    ctx.fillRect(tx, ty, TILE_SIZE, 3);
+    ctx.fillStyle = COLORS.woodDark;
+    ctx.fillRect(tx + 2, ty + 3, 2, 2);
+    ctx.fillRect(tx + 8, ty + 3, 2, 2);
+    ctx.fillRect(tx + 12, ty + 3, 2, 2);
+
+    const leftDef = getTileDef(map.getTile(x - 1, y));
+    const rightDef = getTileDef(map.getTile(x + 1, y));
+    ctx.fillStyle = COLORS.woodDetail; 
+
+    // Diagonal supports connecting to solid walls
+    if (leftDef.col === COLLISION_TYPE.SOLID) {
+        ctx.beginPath(); ctx.moveTo(tx, ty + 3); ctx.lineTo(tx, ty + 10); ctx.lineTo(tx + 7, ty + 3); ctx.fill();
+    }
+    if (rightDef.col === COLLISION_TYPE.SOLID) {
+        ctx.beginPath(); ctx.moveTo(tx + 16, ty + 3); ctx.lineTo(tx + 16, ty + 10); ctx.lineTo(tx + 9, ty + 3); ctx.fill();
+    }
+});
+
+// 5. Spikes (Hazards)
+RenderRegistry.register(RENDER_STYLE.SPIKE_ROCK, (ctx, tx, ty, x, y, map) => {
+    if (map.isSpikeDestroyed(x, y)) return;
+    const seed = (x * 37 + y * 13) % 100;
+    
+    ctx.fillStyle = COLORS.spike;
+    ctx.beginPath();
+    ctx.moveTo(tx + 2, ty + TILE_SIZE);
+    ctx.lineTo(tx + 4 + (seed % 4), ty + 2 + (seed % 6)); 
+    ctx.lineTo(tx + 10, ty + TILE_SIZE);
+    ctx.lineTo(tx + 14, ty + TILE_SIZE);
+    ctx.lineTo(tx + 12, ty + 6 + (seed % 4));
+    ctx.lineTo(tx + 8, ty + TILE_SIZE);
+    ctx.fill();
+    
+    ctx.fillStyle = COLORS.spikeDark;
+    ctx.beginPath();
+    ctx.moveTo(tx + 4 + (seed % 4), ty + 2 + (seed % 6));
+    ctx.lineTo(tx + 5 + (seed % 4), ty + TILE_SIZE);
+    ctx.lineTo(tx + 3 + (seed % 4), ty + TILE_SIZE);
+    ctx.fill();
+});
+
+/**
+ * ============================================================================
+ * MODULE: RENDERING SYSTEM (renderer.js)
+ * Main rendering loop and camera logic.
+ * ============================================================================
+ */
+
+class BackgroundLayer {
+    constructor() {}
+    draw(ctx, game, timeScale) {
+        ctx.fillStyle = '#0d0d1a';
+        ctx.fillRect(80, 0, 10, GAME_HEIGHT);
+        ctx.fillRect(220, 0, 15, GAME_HEIGHT);
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(100, 0); ctx.lineTo(100, 60);
+        ctx.moveTo(110, 0); ctx.lineTo(110, 40);
+        ctx.moveTo(250, 0); ctx.lineTo(250, 90);
+        ctx.stroke();
+        if (game.scripts.currentScript && game.scripts.currentScript.drawBackground) {
+            game.scripts.currentScript.drawBackground(ctx, game, timeScale);
+        }
+    }
+}
+
+class GameRenderer {
+    constructor(canvas, ui) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d', { alpha: false });
+        this.ui = ui; // Kept for reference, though events preferred
+        this.canvas.width = GAME_WIDTH; this.canvas.height = GAME_HEIGHT;
+        this.canvas.style.width = `${GAME_WIDTH * SCALE}px`;
+        this.canvas.style.height = `${GAME_HEIGHT * SCALE}px`;
+        this.backgroundLayer = new BackgroundLayer();
+        this.showMap = false;
+        this.mapScale = 3.0;
+        this.mapOffsetX = 0; this.mapOffsetY = 0;
+        this.worldBounds = this.calculateWorldBounds();
+    }
+
+    calculateWorldBounds() {
+        const keys = Object.keys(WORLD_LAYOUTS);
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        keys.forEach(k => {
+            const [x, y] = k.split(',').map(Number);
+            if(x < minX) minX = x; if(x > maxX) maxX = x;
+            if(y < minY) minY = y; if(y > maxY) maxY = y;
+        });
+        return { minX, maxX, minY, maxY };
+    }
+
+    handleMapInput(game) {
+        const input = game.input;
+        const system = game.system;
+        const map = game.map;
+
+        if (input.keys["Tab"]) {
+            if(!this.tabHeld) {
+                if (system.abilities.minimap) {
+                    this.showMap = !this.showMap;
+                    if(this.showMap) { 
+                        const b = this.worldBounds;
+                        const gridW = (b.maxX - b.minX + 1); const gridH = (b.maxY - b.minY + 1);
+                        const centerGridX = b.minX + (gridW - 1) / 2;
+                        const centerGridY = b.minY + (gridH - 1) / 2;
+                        const pixelSize = this.mapScale;
+                        const roomPixW = 30 * pixelSize; const roomPixH = 18 * pixelSize;
+                        this.mapOffsetX = (centerGridX - map.roomX) * roomPixW;
+                        this.mapOffsetY = (centerGridY - map.roomY) * roomPixH;
+                        this.clampMapCamera(); 
+                    }
+                } else { events.emit('SYSTEM_MESSAGE', "MAP MODULE NOT FOUND"); }
+                this.tabHeld = true;
+            }
+        } else { this.tabHeld = false; }
+
+        if (this.showMap) {
+            const zoomSpeed = 0.05; const panSpeed = 3;
+            if(input.keys["="] || input.keys["+"]) this.mapScale = Math.min(this.mapScale + zoomSpeed, 5.0);
+            if(input.keys["-"] || input.keys["_"]) this.mapScale = Math.max(this.mapScale - zoomSpeed, 0.5); 
+            if(input.up) this.mapOffsetY += panSpeed;
+            if(input.down) this.mapOffsetY -= panSpeed;
+            if(input.left) this.mapOffsetX += panSpeed;
+            if(input.right) this.mapOffsetX -= panSpeed;
+            this.clampMapCamera();
+        }
+    }
+
+    clampMapCamera() {
+        const b = this.worldBounds;
+        const gridW = (b.maxX - b.minX + 1);
+        const gridH = (b.maxY - b.minY + 1);
+        const pixelSize = this.mapScale;
+        const roomPixW = 30 * pixelSize; 
+        const roomPixH = 18 * pixelSize;
+        const totalMapW = gridW * roomPixW;
+        const totalMapH = gridH * roomPixH;
+        const viewportW = 400; const viewportH = 240;
+        let maxOffX = 0; let maxOffY = 0;
+        if (totalMapW > viewportW) maxOffX = (totalMapW - viewportW) / 2;
+        if (totalMapH > viewportH) maxOffY = (totalMapH - viewportH) / 2;
+        this.mapOffsetX = clamp(this.mapOffsetX, -maxOffX, maxOffX);
+        this.mapOffsetY = clamp(this.mapOffsetY, -maxOffY, maxOffY);
+    }
+
+    draw(game, accumulatedTime, timeScale) {
+        this.ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        this.ctx.fillStyle = COLORS.bg;
+        this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+        this.backgroundLayer.draw(this.ctx, game);
+        this.drawFog(game.map);
+        this.drawMapTiles(game.map, accumulatedTime);
+        this.drawEntities(game.map); // Unified Entity Draw
+
+        game.player.draw(this.ctx, game);
+        this.drawParticles(game);
+        this.drawLighting(game); 
+
+        if (game.scripts.currentScript && game.scripts.currentScript.drawForeground) {
+            game.scripts.currentScript.drawForeground(this.ctx, game, timeScale);
+        }
+        this.drawPostEffects(game);
+        if(this.showMap) this.drawMinimap(game);
+    }
+
+    drawFog(map) {
+        this.ctx.fillStyle = COLORS.bg;
+        for (let y = 0; y < map.rows; y++) {
+            for (let x = 0; x < map.cols; x++) {
+                if (!map.visible || !map.visible[y][x]) {
+                    this.ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            }
+        }
+    }
+
+    drawPostEffects(game) {
+        if (game.isDead || game.recoveryTimer > 0) {
+            let mosaicFactor = 0;
+            if (game.isDead) mosaicFactor = Math.min(1, game.deathTimer / 1000);
+            else mosaicFactor = Math.max(0, game.recoveryTimer / 1000);
+
+            if (mosaicFactor > 0) {
+                const mosaicLevel = Math.max(1, Math.floor(mosaicFactor * 20));
+                const w = this.canvas.width; const h = this.canvas.height;
+                this.ctx.imageSmoothingEnabled = false;
+                this.ctx.drawImage(this.canvas, 0, 0, w, h, 0, 0, w / mosaicLevel, h / mosaicLevel);
+                this.ctx.drawImage(this.canvas, 0, 0, w / mosaicLevel, h / mosaicLevel, 0, 0, w, h);
+                this.ctx.fillStyle = `rgba(50, 0, 0, ${mosaicFactor * 0.5})`;
+                this.ctx.fillRect(0, 0, w, h);
+            }
+        }
+    }
+
+    drawMapTiles(map, accumulatedTime) {
+        for (let y = 0; y < map.rows; y++) {
+            for (let x = 0; x < map.cols; x++) {
+                if (!map.visible || !map.visible[y][x]) continue;
+
+                const tileId = map.getTileValue(map.layout[y][x]);
+                const def = getTileDef(tileId);
+                const tx = x * TILE_SIZE;
+                const ty = y * TILE_SIZE;
+
+                // --- USAGE OF STRATEGY PATTERN ---
+                const strategy = RenderRegistry.get(def.ren);
+                if (strategy) {
+                    strategy(this.ctx, tx, ty, x, y, map, def);
+                }
+            }
+        }
+        this.drawWaterSurface(map, accumulatedTime);
+    }
+
+    drawEntities(map) {
+        map.entities.forEach(entity => {
+            const tx = Math.floor(entity.x / TILE_SIZE);
+            const ty = Math.floor(entity.y / TILE_SIZE);
+            if (map.visible && map.visible[ty] && map.visible[ty][tx]) {
+                entity.draw(this.ctx);
+            }
+        });
+    }
+
+    drawWaterSurface(map, accumulatedTime) {
+        this.ctx.fillStyle = COLORS.waterSurface;
+        this.ctx.beginPath();
+        map.waterNodes.forEach(node => {
+            if (map.visible && map.visible[node.y][node.x]) {
+                let wx = node.x * TILE_SIZE;
+                let wy = node.y * TILE_SIZE + 4;
+                for(let i=0; i<=TILE_SIZE; i+=4) {
+                    let h = Math.sin(accumulatedTime * 0.005 + node.x + i * 0.2) * 2;
+                    this.ctx.rect(wx + i, wy + h, 4, 2);
+                }
+            }
+        });
+        this.ctx.fill();
+    }
+
+    drawParticles(game) {
+        game.particles.forEach(p => {
+            const tx = Math.floor(p.x / TILE_SIZE);
+            const ty = Math.floor(p.y / TILE_SIZE);
+            if (game.map.visible && game.map.visible[ty] && game.map.visible[ty][tx]) {
+                p.draw(this.ctx);
+            }
+        });
+    }
+
+    drawLighting(game) {
+        if (game.isDead) return;
+        this.ctx.fillStyle = 'rgba(5, 5, 10, 0.3)';
+        this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        this.ctx.globalCompositeOperation = 'lighter';
+        
+        let g = this.ctx.createRadialGradient(game.player.x, game.player.y, 2, game.player.x, game.player.y, 40);
+        g.addColorStop(0, 'rgba(100, 255, 150, 0.3)');
+        g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        this.ctx.fillStyle = g;
+        this.ctx.beginPath(); this.ctx.arc(game.player.x, game.player.y, 40, 0, Math.PI*2); this.ctx.fill();
+
+        this.ctx.globalCompositeOperation = 'source-over';
+    }
+
+    drawMinimap(game) {
+        const map = game.map;
+        const b = this.worldBounds;
+        this.ctx.fillStyle = COLORS.mapBg;
+        const mapW = 400; const mapH = 240;
+        const mapX = (GAME_WIDTH - mapW) / 2;
+        const mapY = (GAME_HEIGHT - mapH) / 2;
+        this.ctx.fillRect(mapX, mapY, mapW, mapH);
+        
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.rect(mapX, mapY, mapW, mapH);
+        this.ctx.clip();
+        this.ctx.fillStyle = "#fff";
+        this.ctx.font = "10px monospace";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText(`SYSTEM MAP [+/- Zoom] [Arrows Pan]`, GAME_WIDTH/2, mapY + 15);
+        this.ctx.textAlign = "left"; 
+
+        const pixelSize = this.mapScale; 
+        const roomPixW = 30 * pixelSize; const roomPixH = 18 * pixelSize;
+        const gridW = (b.maxX - b.minX + 1); const gridH = (b.maxY - b.minY + 1);
+        const viewCX = mapX + mapW/2; const viewCY = mapY + mapH/2;
+
+        for(let rY = b.minY; rY <= b.maxY; rY++) {
+            for(let rX = b.minX; rX <= b.maxX; rX++) {
+                const key = `${rX},${rY}`;
+                const distX = rX - (b.minX + (gridW - 1)/2); 
+                const distY = rY - (b.minY + (gridH - 1)/2);
+                const dx = viewCX + this.mapOffsetX + distX * roomPixW - (roomPixW/2);
+                const dy = viewCY + this.mapOffsetY + distY * roomPixH - (roomPixH/2);
+
+                if (dx + roomPixW < mapX || dx > mapX + mapW || dy + roomPixH < mapY || dy > mapY + mapH) continue;
+
+                if (map.explored[key]) {
+                    const layout = WORLD_LAYOUTS[key];
+                    const exploredData = map.explored[key];
+                    const baseColor = (rX === 0 && rY === 0) ? '#222233' : '#111116';
+                    if (layout) {
+                        this.ctx.fillStyle = baseColor;
+                        this.ctx.fillRect(dx, dy, roomPixW, roomPixH);
+                        for (let r = 0; r < layout.length; r++) {     
+                            for (let c = 0; c < layout[r].length; c++) { 
+                                if (exploredData[r][c]) {
+                                    const tile = map.getTileValue(layout[r][c]);
+                                    if (tile !== 0) {
+                                        const def = getTileDef(tile);
+                                        const isSecretRevealed = map.secretRegistry[key] && map.secretRegistry[key].has(`${c},${r}`);
+
+                                        if (def.col === COLLISION_TYPE.SOLID || def.isSecret) {
+                                            if (def.isSecret && isSecretRevealed) continue; 
+                                            this.ctx.fillStyle = COLORS.mapWall;
+                                        }
+                                        else if (def.col === COLLISION_TYPE.LIQUID) this.ctx.fillStyle = COLORS.mapWater;
+                                        else if (def.col === COLLISION_TYPE.CLIMBABLE) this.ctx.fillStyle = COLORS.ladder;
+                                        else if (def.col === COLLISION_TYPE.ONE_WAY) this.ctx.fillStyle = COLORS.woodDark;
+                                        else if (def.col === COLLISION_TYPE.HAZARD) {
+                                            if (map.isSpikeDestroyedAt(rX, rY, c, r)) continue; 
+                                            this.ctx.fillStyle = "#ff0000"; 
+                                        }
+                                        else if (def.ren === RENDER_STYLE.OBJECT_MARKER) {
+                                            if (tile === 3) this.ctx.fillStyle = COLORS.chestClosed;
+                                            else this.ctx.fillStyle = COLORS.lightGlow;
+                                        }
+                                        else continue;
+                                        this.ctx.fillRect(dx + c * pixelSize, dy + r * pixelSize, pixelSize, pixelSize);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (rX === map.roomX && rY === map.roomY) {
+                        this.ctx.strokeStyle = COLORS.playerGlow;
+                        this.ctx.lineWidth = 1;
+                        this.ctx.strokeRect(dx - 1, dy - 1, roomPixW + 2, roomPixH + 2);
+                        const px = (game.player.x / TILE_SIZE) * pixelSize;
+                        const py = (game.player.y / TILE_SIZE) * pixelSize;
+                        this.ctx.fillStyle = '#fff';
+                        this.ctx.fillRect(dx + px, dy + py, 2, 2);
+                    }
+                } 
+            }
+        }
+        this.ctx.restore();
+    }
+}
 
 /**
  * ============================================================================
@@ -366,7 +872,7 @@ class CountBounce {
         }        
 
         const tileRaw = WORLD_LAYOUTS[`${this.current.rx},${this.current.ry}`][this.current.y][this.current.x];
-        const tileVal = getTileValue(tileRaw);
+        const tileVal = (tileRaw === 'x') ? 99 : parseInt(tileRaw);
         const def = getTileDef(tileVal);
         
         if (def.col === COLLISION_TYPE.SOLID) { 
@@ -669,12 +1175,14 @@ class Map {
         return true;
     }
 
+    getTileValue(val) { return (val === 'x') ? 99 : parseInt(val); }
+
     generateEntities(roomKey) {
         this.entities = [];
         this.waterNodes = [];
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
-                let t = getTileValue(this.layout[y][x]);
+                let t = this.getTileValue(this.layout[y][x]);
                 if (ENTITY_FACTORY[t]) ENTITY_FACTORY[t](this, x, y, roomKey);
             }
         }
@@ -767,7 +1275,7 @@ class Map {
                 if (this.visible[n.y][n.x]) continue;
                 markVisible(n.x, n.y);
                 
-                const tile = getTileValue(this.layout[n.y][n.x]);
+                const tile = this.getTileValue(this.layout[n.y][n.x]);
                 const def = getTileDef(tile);
                 
                 if (def.col === COLLISION_TYPE.HAZARD && !this.isSpikeDestroyed(n.x, n.y)) continue;
@@ -781,7 +1289,7 @@ class Map {
 
     getTile(x, y) {
         if (x >= 0 && x < this.cols && y >= 0 && y < this.rows) {
-            return getTileValue(this.layout[y][x]);
+            return this.getTileValue(this.layout[y][x]);
         }
         let nx = x, ny = y, rx = this.roomX, ry = this.roomY;
         if (x < 0) { rx--; nx = x + this.cols; } 
@@ -792,7 +1300,7 @@ class Map {
         const key = `${rx},${ry}`;
         const neighborLayout = WORLD_LAYOUTS[key];
         if (neighborLayout && ny >= 0 && ny < neighborLayout.length && nx >= 0 && nx < neighborLayout[0].length) {
-            return getTileValue(neighborLayout[ny][nx]);
+            return this.getTileValue(neighborLayout[ny][nx]);
         }
         return 0; 
     }
@@ -874,10 +1382,7 @@ class UIManager {
 class SystemManager {
     constructor(ui) {
         this.ui = ui;
-        this.abilities = { 
-            minimap: true, 
-            minerHat: false 
-        };
+        this.abilities = { minimap: false, minerHat: false };
         
         // --- Event Listener ---
         events.on('UNLOCK_ABILITY', (id) => this.enable(id));
@@ -903,8 +1408,7 @@ class Game {
         this.renderer = new GameRenderer(document.getElementById('gameCanvas'), this.ui);
         this.scripts = new ScriptManager();
         this.map = new Map();
-        // this.player = new Player(55, 150);
-        this.player = new Player(-300, 150);
+        this.player = new Player(55, 150);
         this.particles = [];
         this.isDead = false;
         this.deathTimer = 0;
