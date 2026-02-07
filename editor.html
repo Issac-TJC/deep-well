@@ -43,36 +43,73 @@
         #world-canvas { cursor: grab; background-color: #050505; }
         #world-canvas:active { cursor: grabbing; }
 
-        /* Room Canvas - Scaled Up */
+        /* Room Canvas - Scaled Up FIXED */
         #room-canvas {
+            /* Logic: Fill as much space as possible while maintaining aspect ratio */
+            height: 99%; 
             width: auto;
-            height: auto;
-            max-width: 95%;
-            max-height: 95%;
+            max-width: 100%;
             aspect-ratio: 480/288;
+            
             image-rendering: pixelated; 
+            background-color: #0a0a0a;
+            /* Grid lines */
             background-image: 
                 linear-gradient(#1a1a1a 1px, transparent 1px),
                 linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
-            background-size: 3.33% 5.55%; /* Approx for 30x18 grid */
-            background-color: #0a0a0a;
+            /* Precise grid alignment: 100% / 30 columns = 3.3333%, 100% / 18 rows = 5.5555% */
+            background-size: 3.33333% 5.55555%; 
         }
         
-        /* Minimap Overlay */
+        /* Minimap Overlay - Window Style */
         #minimap-overlay {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: rgba(0, 0, 0, 0.4);
+            background: rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255,255,255,0.2);
-            padding: 10px;
             z-index: 100;
             display: none;
             backdrop-filter: blur(2px);
-            pointer-events: none;
-            border-radius: 8px;
+            border-radius: 4px;
+            /* Resizable and Draggable properties */
+            resize: both;
+            overflow: hidden;
+            min-width: 100px;
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
         }
-        #minimap-canvas { display: block; image-rendering: pixelated; opacity: 0.85; }
+
+        #minimap-header {
+            background: rgba(255, 255, 255, 0.1);
+            height: 16px;
+            cursor: move;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: #aaa;
+            user-select: none;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #minimap-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            overflow: hidden;
+        }
+
+        #minimap-canvas { 
+            display: block; 
+            image-rendering: pixelated; 
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
 
         /* Palette Grid */
         #palette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; max-height: 200px; overflow-y: auto; }
@@ -213,10 +250,12 @@
         <!-- World Map Canvas -->
         <canvas id="world-canvas"></canvas>
         
-        <!-- Minimap Overlay -->
-        <div id="minimap-overlay">
-            <canvas id="minimap-canvas" width="150" height="150"></canvas>
-            <div style="text-align:center; font-size:10px; color:#aaa; margin-top:2px;">Minimap</div>
+        <!-- Minimap Window -->
+        <div id="minimap-overlay" style="display:none;">
+            <div id="minimap-header">MINIMAP (Drag)</div>
+            <div id="minimap-content">
+                <canvas id="minimap-canvas" width="180" height="108"></canvas>
+            </div>
         </div>
     </div>
 </div>
@@ -572,6 +611,44 @@ const app = {
         this.setMode('world');
         this.centerView();
         this.drawWorld();
+        this.setupDraggable();
+    },
+    
+    setupDraggable() {
+        const overlay = document.getElementById('minimap-overlay');
+        const header = document.getElementById('minimap-header');
+        let isDragging = false;
+        let startX, startY, initLeft, initTop;
+        
+        header.addEventListener('mousedown', e => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            // Get current computed position since it might be absolute
+            const rect = overlay.getBoundingClientRect();
+            // We need relative position to viewport to set style.top/left
+            initLeft = rect.left;
+            initTop = rect.top;
+            
+            // Disable text selection during drag
+            document.body.style.userSelect = 'none';
+        });
+        
+        window.addEventListener('mousemove', e => {
+            if(!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            
+            // Remove 'right' property if it exists so left takes over
+            overlay.style.right = 'auto';
+            overlay.style.left = (initLeft + dx) + 'px';
+            overlay.style.top = (initTop + dy) + 'px';
+        });
+        
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            document.body.style.userSelect = 'auto';
+        });
     },
 
     resizeCanvas() {
@@ -590,7 +667,10 @@ const app = {
         
         document.getElementById('room-canvas').style.display = m === 'room' ? 'block' : 'none';
         document.getElementById('world-canvas').style.display = m === 'world' ? 'block' : 'none';
-        document.getElementById('minimap-overlay').style.display = m === 'room' ? 'block' : 'none';
+        
+        // Minimap is visible in both modes? Usually room editor only.
+        // User asked for "upper right minimap", usually context for Room Editor.
+        document.getElementById('minimap-overlay').style.display = m === 'room' ? 'flex' : 'none';
 
         if (m === 'room') {
             this.drawRoom();
@@ -712,7 +792,7 @@ const app = {
                             // Try to guess a representative color for preview
                             if (def.col === COLLISION_TYPE.SOLID) ctx.fillStyle = COLORS.tileDark;
                             else if (def.col === COLLISION_TYPE.LIQUID) ctx.fillStyle = COLORS.waterSurface;
-                            else if (def.col === COLLISION_TYPE.HAZARD) ctx.fillStyle = COLORS.spike;
+                            else if (def.col === COLLISION_TYPE.HAZARD) ctx.fillStyle = "#ff0000"; // Red Spikes
                             else ctx.fillStyle = "#888";
                             
                             // If it's a generated tile with raw fillStyle in render, we can't easily guess, so default to gray
@@ -741,10 +821,34 @@ const app = {
     drawMinimap() {
         const ctx = this.ctxMini;
         const cvs = document.getElementById('minimap-canvas');
+        
+        // Use container size but maintain internal logical resolution if needed, 
+        // or just let canvas stretch. 
+        // For crisp pixels, we should probably resize canvas to match container pixel size?
+        // But the user asked for 30:18 scaling. Let's fix the drawing logic scale.
+        
+        const contentDiv = document.getElementById('minimap-content');
+        if(contentDiv.clientWidth !== cvs.width || contentDiv.clientHeight !== cvs.height) {
+            // Auto resize canvas to fit container (Resizable Window)
+            cvs.width = contentDiv.clientWidth;
+            cvs.height = contentDiv.clientHeight;
+        }
+
         ctx.clearRect(0,0,cvs.width, cvs.height);
         
-        const roomPixW = 45; // Scale for minimap
-        const roomPixH = 27; 
+        // 3x3 rooms. Each room is 30x18 units.
+        // Total grid is 90x54 units.
+        // We need to scale this to fit the canvas.
+        
+        const totalW = 90;
+        const totalH = 54;
+        
+        // Calculate scale to fit
+        const scale = Math.min(cvs.width / totalW, cvs.height / totalH) * 0.9; // 0.9 for padding
+        
+        const roomPixW = 30 * scale;
+        const roomPixH = 18 * scale;
+        
         const centerX = cvs.width / 2;
         const centerY = cvs.height / 2;
 
@@ -756,12 +860,16 @@ const app = {
                 const drawX = centerX + (dx * roomPixW) - (roomPixW/2);
                 const drawY = centerY + (dy * roomPixH) - (roomPixH/2);
                 
+                // Draw Grid Slot
                 ctx.strokeStyle = "rgba(100,100,100,0.5)";
                 ctx.lineWidth = 1;
                 ctx.strokeRect(drawX, drawY, roomPixW, roomPixH);
 
                 if (worldData[key]) {
-                    ctx.fillStyle = (dx===0 && dy===0) ? "rgba(34,51,34,0.9)" : "rgba(17,17,34,0.9)";
+                    // Match World Map Colors
+                    // Active Room: Highlighted slightly lighter
+                    // Others: Dark background
+                    ctx.fillStyle = (dx===0 && dy===0) ? "#444455" : "#333344";
                     ctx.fillRect(drawX, drawY, roomPixW, roomPixH);
                     
                     const rData = worldData[key];
@@ -774,11 +882,19 @@ const app = {
                             const tid = rData[r][c];
                             if (tid !== 0) {
                                 ctx.fillStyle = "#888";
+                                // Add specific colors for minimap too if desired
+                                const def = TILE_DEF[tid];
+                                if (def) {
+                                    if (def.col === COLLISION_TYPE.HAZARD) ctx.fillStyle = "#d44";
+                                    else if (def.col === COLLISION_TYPE.SOLID) ctx.fillStyle = "#112";
+                                }
                                 ctx.fillRect(drawX + c*dotW, drawY + r*dotH, Math.ceil(dotW), Math.ceil(dotH));
                             }
                         }
                     }
                 }
+                
+                // Current Room Border Highlight
                 if(dx===0 && dy===0) {
                     ctx.strokeStyle = "#0f0";
                     ctx.lineWidth = 2;
