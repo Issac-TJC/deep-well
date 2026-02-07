@@ -7,7 +7,7 @@
 
     <link rel="stylesheet" href="boss/boss.css">
     <link rel="stylesheet" href="mobile/mobile.css">
-    
+
     <style>
         body {
             margin: 0;
@@ -1180,18 +1180,7 @@ class GameRenderer {
         if(this.showMap) this.drawMinimap(game);
     }
 
-    drawDecor() {
-        this.ctx.fillStyle = '#0d0d1a';
-        this.ctx.fillRect(80, 0, 10, GAME_HEIGHT);
-        this.ctx.fillRect(220, 0, 15, GAME_HEIGHT);
-        this.ctx.strokeStyle = '#1a1a2e';
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.moveTo(100, 0); this.ctx.lineTo(100, 60);
-        this.ctx.moveTo(110, 0); this.ctx.lineTo(110, 40);
-        this.ctx.moveTo(250, 0); this.ctx.lineTo(250, 90);
-        this.ctx.stroke();
-    }
+
 
     drawMapTiles(map, accumulatedTime) {
         // Draw Tiles
