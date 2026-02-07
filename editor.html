@@ -51,7 +51,6 @@
             max-height: 95%;
             aspect-ratio: 480/288;
             image-rendering: pixelated; 
-            /* Subtle grid background for Air */
             background-image: 
                 linear-gradient(#1a1a1a 1px, transparent 1px),
                 linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
@@ -63,14 +62,13 @@
         #minimap-overlay {
             position: absolute;
             top: 20px;
-            right: 20px; /* Moved to right */
-            background: rgba(0, 0, 0, 0.4); /* Semi-transparent */
+            right: 20px;
+            background: rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(255,255,255,0.2);
             padding: 10px;
             z-index: 100;
             display: none;
             backdrop-filter: blur(2px);
-            /* Important: Click-through */
             pointer-events: none;
             border-radius: 8px;
         }
@@ -116,18 +114,22 @@
 </head>
 <body>
 
-<!-- HIDDEN FILE INPUT -->
+<!-- HIDDEN FILE INPUTS -->
 <input type="file" id="file-loader" accept=".js,.json,.txt" style="display: none;" onchange="dataManager.onFileSelected(this)">
+<input type="file" id="tile-js-loader" accept=".js" style="display: none;" onchange="dataManager.onTileJsSelected(this)">
 
 <!-- SAVE MODAL -->
 <div id="save-modal">
     <div class="modal-box">
         <h3>Save Options</h3>
-        <p style="font-size: 11px; color: #aaa; margin-bottom: 20px;">Choose how you want to save the map data.</p>
+        <p style="font-size: 11px; color: #aaa; margin-bottom: 20px;">Choose file type to save.</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <button id="btn-save-overwrite" class="success" onclick="dataManager.saveOverwrite()">OVERWRITE SOURCE</button>
-            <button id="btn-save-new" class="active" onclick="dataManager.saveAsNew()">SAVE AS NEW FILE</button>
+            <button class="active" onclick="dataManager.saveMap()">SAVE MAP (rooms.js)</button>
+            <button class="success" onclick="dataManager.savePatchedTileJs()">SAVE PATCHED tile.js</button>
             <button class="secondary" onclick="document.getElementById('save-modal').style.display='none'">CANCEL</button>
+        </div>
+        <div id="tile-js-status" style="font-size: 10px; color: #ffaa00; margin-top: 10px; display:none;">
+            Warning: Original tile.js not loaded. Cannot patch.
         </div>
     </div>
 </div>
@@ -188,11 +190,11 @@
     <div class="group">
         <h3>File / Data</h3>
         <div class="row">
-            <button class="active" onclick="dataManager.openSmart()" title="Auto-detects browser capabilities">OPEN FILE</button>
-            <button class="success" onclick="dataManager.saveWithUI()">SAVE FILE</button>
+            <button class="active" onclick="dataManager.openSmart()" title="Load rooms.js">OPEN MAP</button>
+            <button onclick="document.getElementById('tile-js-loader').click()" title="Load tile.js to enable patching">LOAD TILE.JS</button>
         </div>
         <div class="row">
-            <button class="secondary" onclick="dataManager.openImport()">TXT IMPORT</button>
+            <button class="success" onclick="dataManager.saveWithUI()">SAVE...</button>
         </div>
     </div>
 </div>
@@ -221,8 +223,8 @@
 
 <!-- PIXEL EDITOR OVERLAY -->
 <div id="pixel-editor-panel">
-    <div class="group" style="background: #222; padding: 20px; border: 1px solid #555; width: 520px;">
-        <h3>Tile / Asset Designer</h3>
+    <div class="group" style="background: #222; padding: 20px; border: 1px solid #555; width: 600px;">
+        <h3>Custom Tile Designer</h3>
         <div style="display: flex; gap: 20px;">
             <div>
                 <canvas id="pixel-canvas" width="256" height="256" style="border: 1px solid #555; cursor: crosshair;"></canvas>
@@ -230,36 +232,46 @@
             </div>
             <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
                 <div>
-                    <label>Name:</label>
-                    <input type="text" id="pe-name" value="NewTile">
+                    <label>Name (JS Identifier):</label>
+                    <input type="text" id="pe-name" value="MyCustomTile" placeholder="No spaces">
                 </div>
-                <div style="display: flex; gap: 5px;">
-                     <div style="flex: 1;">
-                        <label>ID (Num):</label>
-                        <input type="number" id="pe-id" value="20">
-                     </div>
-                     <div style="flex: 1;">
-                        <label>Char (Map):</label>
-                        <input type="text" id="pe-char" value="" maxlength="1" placeholder="Ex: A">
-                     </div>
-                </div>
-                <div class="helper-text" style="text-align: left; margin-top: 0;">
-                    Character used in saved file map strings.
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex:1">
+                        <label>ID (Number):</label>
+                        <input type="number" id="pe-id" value="101">
+                    </div>
+                    <div style="flex:1">
+                        <label>Char (Map Key):</label>
+                        <input type="text" id="pe-char" value="A" maxlength="1">
+                    </div>
                 </div>
                 <div>
-                    <label>Type:</label>
+                    <label>Collision Type:</label>
                     <select id="pe-type">
-                        <option value="1">SOLID (Wall)</option>
-                        <option value="0">NONE (Air/Decor)</option>
-                        <option value="2">LIQUID (Water)</option>
+                        <option value="1">SOLID (Wall/Ground)</option>
+                        <option value="0">NONE (Decoration/Air)</option>
+                        <option value="2">ONE_WAY (Platform)</option>
+                        <option value="3">LIQUID (Water)</option>
                         <option value="4">CLIMBABLE (Ladder)</option>
-                        <option value="99">HAZARD (Spike)</option>
-                        <option value="8">PLATFORM (One-Way)</option>
+                        <option value="5">HAZARD (Spike)</option>
                     </select>
                 </div>
                 <div>
-                    <label>Colors:</label>
-                    <div id="pe-palette"></div>
+                    <label>Color Palette & Custom Picker:</label>
+                    <div style="display:flex; align-items:center; gap:10px; margin-top: 5px; margin-bottom: 5px; background: #111; padding: 5px; border: 1px solid #333; border-radius: 4px;">
+                        <!-- Custom Color Input -->
+                        <div style="text-align:center;">
+                            <input type="color" id="pe-custom-color" value="#ffffff" style="width:32px; height:32px; border:none; padding:0; cursor:pointer; display:block;">
+                            <span style="font-size:9px; color:#888;">Custom</span>
+                        </div>
+                        <!-- Divider -->
+                        <div style="width:1px; height:30px; background:#444;"></div>
+                        <!-- Palette -->
+                        <div id="pe-palette" style="display: flex; flex-wrap: wrap; gap: 2px;"></div>
+                    </div>
+                </div>
+                <div class="helper-text" style="text-align: left; margin-top: 10px; border-top: 1px solid #444; padding-top: 5px;">
+                    Saves locally. Load <b>tile.js</b> to patch definitions and code into it on save.
                 </div>
                 <div style="margin-top: auto; display: flex; gap: 5px;">
                     <button class="secondary" onclick="pixelEditor.close()">Cancel</button>
@@ -285,138 +297,272 @@
 
 <script>
 /**
- * ------------------------------------------------------------------
- * CONSTANTS & CONFIG
- * ------------------------------------------------------------------
+ * ============================================================================
+ * SECTION 1: GAME CORE COMPATIBILITY
+ * ============================================================================
  */
-const TILE_SIZE = 16;
-const ROOM_COLS = 30;
-const ROOM_ROWS = 18;
-const ROOM_W = ROOM_COLS * TILE_SIZE; // 480
-const ROOM_H = ROOM_ROWS * TILE_SIZE; // 288
 
-// Engine Constants (Reference)
+// --- FROM params.js ---
+const GAME_WIDTH = 480;
+const GAME_HEIGHT = 288;
+const TILE_SIZE = 16;
+const SCALE = 2;
+
+const COLORS = {
+    bg: '#090914',
+    tileDark: '#111122',
+    tileLight: '#222238',
+    tileHighlight: '#333355',
+    grass: '#2a2a4a', 
+    grassTip: '#4a4a7a',
+    flowerStem: '#446644',
+    flowerBulbClosed: '#444466',
+    flowerBulbOpen: '#aa88ff',
+    waterBase: 'rgba(20, 40, 100, 0.4)',
+    waterSurface: 'rgba(50, 100, 255, 0.6)',
+    playerCore: '#ffffff',
+    playerGlow: '#aaffaa',
+    hat: '#ffcc00',          
+    hatLight: '#ffeedd',     
+    mapBg: 'rgba(0, 0, 0, 0.85)',
+    mapVisited: '#444466',
+    mapCurrent: '#aaffaa',
+    mapWall: '#666688',   
+    mapWater: '#4444ff',
+    chestClosed: '#d4af37',
+    chestOpen: '#8a6e26',
+    ladder: '#444455',
+    lightBase: '#333344',
+    lightGlow: '#ffeedd',
+    spike: '#666677', 
+    spikeDark: '#444455',
+    woodDark: '#2a1e19',   
+    woodLight: '#4e3b31',  
+    woodDetail: '#3a2a24',
+    // Palette Extras
+    white: '#ffffff',
+    red: '#ff0000',
+    green: '#00ff00',
+    blue: '#0000ff',
+    cyan: '#00ffff',
+    magenta: '#ff00ff',
+    yellow: '#ffff00',
+    gray: '#888888'
+};
+
+// --- FROM tile.js ---
 const COLLISION_TYPE = {
     NONE: 0, SOLID: 1, ONE_WAY: 2, LIQUID: 3, CLIMBABLE: 4, HAZARD: 5
 };
 
 const RENDER_STYLE = {
     INVISIBLE: 0, BLOCK_BASIC: 1, LIQUID: 2, LADDER: 3, 
-    PLATFORM_WOOD: 4, SPIKE_ROCK: 5, OBJECT_MARKER: 6, CUSTOM: 100
+    PLATFORM_WOOD: 4, SPIKE_ROCK: 5, OBJECT_MARKER: 6
 };
 
-// ------------------------------------------------------------------
-// DATA MAPPING CONFIGURATION (Refactored for Index Compatibility)
-// ------------------------------------------------------------------
+// EDITOR STATE FOR NEW TILES
+const NEW_TILES_LIST = []; 
 
-// Mappings for file I/O. 
-// IMPORT_MAP mirrors index.html's TILE_DATA_MAP
-let IMPORT_MAP = {
-    'x': 99, 
+const TILE_DATA_MAP = {
+    '0': 0,   // Air
+    '1': 1,   // Dirt
+    '2': 2,   // Water
+    '3': 3,   // Chest
+    '4': 4,   // Ladder
+    '5': 5,   // Light
+    '6': 6,   // SecretWall
+    '8': 8,   // WoodPlatform
+    '10': 10, // DirtAlt
+    'x': 99,  // Spike
     'X': 99
 };
 
-// EXPORT_MAP is the inverse for saving
-let EXPORT_MAP = {
-    99: 'x'
-};
-
-// Utility: Tile Codec for Hot-Pluggable Logic
-const TileCodec = {
-    /**
-     * Converts raw input (string char or number) into a standard Tile ID
-     */
-    decode(input) {
-        if (typeof input === 'number') return input;
-        
-        // 1. Check Configuration Table for special overrides
-        if (IMPORT_MAP.hasOwnProperty(input)) {
-            return IMPORT_MAP[input];
-        }
-        
-        // 2. Standard Fallback: Try parsing as integer
-        const val = parseInt(input);
-        return isNaN(val) ? 0 : val;
-    },
-
-    /**
-     * Converts a standard Tile ID into its string representation for saving
-     */
-    encode(id) {
-        // 1. Check Configuration Table for special overrides
-        if (EXPORT_MAP.hasOwnProperty(id)) {
-            return EXPORT_MAP[id];
-        }
-        
-        // 2. Standard Fallback: Convert to string
-        return id.toString();
-    },
-
-    // Registers a new custom mapping dynamically
-    registerMapping(id, char) {
-        if (!char || !id) return;
-        IMPORT_MAP[char] = id;
-        EXPORT_MAP[id] = char;
-        console.log(`[Editor] Registered mapping: ID ${id} <-> Char '${char}'`);
-    }
-};
-
-// Updated Tile Definitions
-let TILE_DEF = {
+const TILE_DEF = {
     0:  { name: "Air",           col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.INVISIBLE,    isVoid: true },
-    1:  { name: "Dirt",          col: COLLISION_TYPE.SOLID,     ren: RENDER_STYLE.BLOCK_BASIC,  color: "#666688" },
-    2:  { name: "Water",         col: COLLISION_TYPE.LIQUID,    ren: RENDER_STYLE.LIQUID,       color: "rgba(68, 68, 255, 0.5)" },
-    3:  { name: "ChestNode",     col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.OBJECT_MARKER, color: "#d4af37", symbol: "C" },
-    4:  { name: "Ladder",        col: COLLISION_TYPE.CLIMBABLE, ren: RENDER_STYLE.LADDER,       color: "#888899", style: "ladder" },
-    5:  { name: "LightNode",     col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.OBJECT_MARKER, color: "#ffeedd", symbol: "L" },
-    6:  { name: "SecretWall",    col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.BLOCK_BASIC,  color: "#555577", alpha: 0.6 }, 
-    8:  { name: "WoodPlatform",  col: COLLISION_TYPE.ONE_WAY,   ren: RENDER_STYLE.PLATFORM_WOOD, color: "#8b4513", height: 4 },
-    10: { name: "DirtAlt",       col: COLLISION_TYPE.SOLID,     ren: RENDER_STYLE.BLOCK_BASIC,  color: "#555570" },
-    99: { name: "Spike",         col: COLLISION_TYPE.HAZARD,    ren: RENDER_STYLE.SPIKE_ROCK,   color: "#ff3333", style: "spike" }
+    1:  { name: "Dirt",          col: COLLISION_TYPE.SOLID,     ren: RENDER_STYLE.BLOCK_BASIC },
+    2:  { name: "Water",         col: COLLISION_TYPE.LIQUID,    ren: RENDER_STYLE.LIQUID,       friction: 0.9, gravityMod: 0.5, isVoid: true },
+    3:  { name: "ChestNode",     col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.OBJECT_MARKER, isVoid: true, symbol: "C" },
+    4:  { name: "Ladder",        col: COLLISION_TYPE.CLIMBABLE, ren: RENDER_STYLE.LADDER,       isVoid: true },
+    5:  { name: "LightNode",     col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.OBJECT_MARKER, isVoid: true, symbol: "L" },
+    6:  { name: "SecretWall",    col: COLLISION_TYPE.NONE,      ren: RENDER_STYLE.BLOCK_BASIC,  isSecret: true }, 
+    8:  { name: "WoodPlatform",  col: COLLISION_TYPE.ONE_WAY,   ren: RENDER_STYLE.PLATFORM_WOOD, isVoid: true },
+    10: { name: "DirtAlt",       col: COLLISION_TYPE.SOLID,     ren: RENDER_STYLE.BLOCK_BASIC },
+    99: { name: "Spike",         col: COLLISION_TYPE.HAZARD,    ren: RENDER_STYLE.SPIKE_ROCK,   damage: 100, isVoid: true }
 };
 
-let CUSTOM_SPRITES = {}; 
+function getTileDef(id) { return TILE_DEF[id] || TILE_DEF[0]; }
+function getTileValue(val) { 
+    if (typeof val === 'number') return val;
+    if (TILE_DATA_MAP.hasOwnProperty(val)) return TILE_DATA_MAP[val];
+    return 0; 
+}
+
+// Registry with Editor compatibility
+const RenderRegistry = {
+    strategies: {},
+    register: function(id, fn) { this.strategies[id] = fn; },
+    get: function(id) { return this.strategies[id]; }
+};
+
+// 1. Basic Block 
+RenderRegistry.register(RENDER_STYLE.BLOCK_BASIC, (ctx, tx, ty, x, y, map, def) => {
+    ctx.save();
+    const bounceOff = map.bouncingTiles[`${x},${y}`] || 0;
+    if (bounceOff !== 0) ctx.translate(0, bounceOff);
+    if (def.isSecret && map.isRevealed(x, y)) ctx.globalAlpha = 0.4;
+
+    ctx.fillStyle = def.customColor || COLORS.tileDark; 
+    ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+    
+    // Add texture details
+    if ((x + y) % 2 === 0) {
+        ctx.fillStyle = COLORS.tileLight;
+        ctx.fillRect(tx + 2, ty + 2, 4, 4);
+        ctx.fillRect(tx + 8, ty + 8, 2, 2);
+        ctx.fillRect(tx + 12, ty + 4, 2, 2);
+    }
+
+    // Draw borders (Void edges)
+    ctx.fillStyle = COLORS.tileHighlight;
+    const edgeW = 2;
+    const isRegionInside = (nx, ny) => {
+        if (nx < 0 || nx >= map.cols || ny < 0 || ny >= map.rows) return false;
+        // In editor, everything is revealed, so just check void
+        const tileId = getTileValue(map.getTile(nx, ny));
+        const ntDef = getTileDef(tileId);
+        return ntDef.isVoid && !ntDef.isSecret;
+    };
+
+    if (isRegionInside(x, y - 1)) ctx.fillRect(tx, ty, TILE_SIZE, edgeW);
+    if (isRegionInside(x, y + 1)) ctx.fillRect(tx, ty + TILE_SIZE - edgeW, TILE_SIZE, edgeW);
+    if (isRegionInside(x - 1, y)) ctx.fillRect(tx, ty, edgeW, TILE_SIZE);
+    if (isRegionInside(x + 1, y)) ctx.fillRect(tx + TILE_SIZE - edgeW, ty, edgeW, TILE_SIZE);
+    ctx.restore();
+});
+
+// 2. Liquid 
+RenderRegistry.register(RENDER_STYLE.LIQUID, (ctx, tx, ty) => {
+    ctx.fillStyle = COLORS.waterBase;
+    ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
+});
+
+// 3. Ladder
+RenderRegistry.register(RENDER_STYLE.LADDER, (ctx, tx, ty) => {
+    ctx.fillStyle = COLORS.ladder;
+    ctx.fillRect(tx + 4, ty, 2, TILE_SIZE);
+    ctx.fillRect(tx + 10, ty, 2, TILE_SIZE);
+    for(let i=2; i<TILE_SIZE; i+=5) ctx.fillRect(tx + 4, ty + i, 8, 1);
+});
+
+// 4. Wood Platform
+RenderRegistry.register(RENDER_STYLE.PLATFORM_WOOD, (ctx, tx, ty, x, y, map) => {
+    ctx.fillStyle = COLORS.woodLight; 
+    ctx.fillRect(tx, ty, TILE_SIZE, 3);
+    ctx.fillStyle = COLORS.woodDark;
+    ctx.fillRect(tx + 2, ty + 3, 2, 2);
+    ctx.fillRect(tx + 8, ty + 3, 2, 2);
+    ctx.fillRect(tx + 12, ty + 3, 2, 2);
+
+    const leftId = getTileValue(map.getTile(x - 1, y));
+    const rightId = getTileValue(map.getTile(x + 1, y));
+    const leftDef = getTileDef(leftId);
+    const rightDef = getTileDef(rightId);
+    ctx.fillStyle = COLORS.woodDetail; 
+
+    if (leftDef.col === COLLISION_TYPE.SOLID) {
+        ctx.beginPath(); ctx.moveTo(tx, ty + 3); ctx.lineTo(tx, ty + 10); ctx.lineTo(tx + 7, ty + 3); ctx.fill();
+    }
+    if (rightDef.col === COLLISION_TYPE.SOLID) {
+        ctx.beginPath(); ctx.moveTo(tx + 16, ty + 3); ctx.lineTo(tx + 16, ty + 10); ctx.lineTo(tx + 9, ty + 3); ctx.fill();
+    }
+});
+
+// 5. Spikes
+RenderRegistry.register(RENDER_STYLE.SPIKE_ROCK, (ctx, tx, ty, x, y, map) => {
+    if (map.isSpikeDestroyed(x, y)) return;
+    const seed = (x * 37 + y * 13) % 100;
+    
+    ctx.fillStyle = COLORS.spike;
+    ctx.beginPath();
+    ctx.moveTo(tx + 2, ty + TILE_SIZE);
+    ctx.lineTo(tx + 4 + (seed % 4), ty + 2 + (seed % 6)); 
+    ctx.lineTo(tx + 10, ty + TILE_SIZE);
+    ctx.lineTo(tx + 14, ty + TILE_SIZE);
+    ctx.lineTo(tx + 12, ty + 6 + (seed % 4));
+    ctx.lineTo(tx + 8, ty + TILE_SIZE);
+    ctx.fill();
+    
+    ctx.fillStyle = COLORS.spikeDark;
+    ctx.beginPath();
+    ctx.moveTo(tx + 4 + (seed % 4), ty + 2 + (seed % 6));
+    ctx.lineTo(tx + 5 + (seed % 4), ty + TILE_SIZE);
+    ctx.lineTo(tx + 3 + (seed % 4), ty + TILE_SIZE);
+    ctx.fill();
+});
+
+// 6. Object Marker (Nodes)
+RenderRegistry.register(RENDER_STYLE.OBJECT_MARKER, (ctx, tx, ty, x, y, map, def) => {
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 12px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(def.symbol || "?", tx + TILE_SIZE/2, ty + TILE_SIZE/2);
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.strokeRect(tx, ty, TILE_SIZE, TILE_SIZE);
+});
+
+// 7. Invisible
+RenderRegistry.register(RENDER_STYLE.INVISIBLE, () => {});
+
+/**
+ * ============================================================================
+ * SECTION 2: EDITOR LOGIC
+ * ============================================================================
+ */
+
+const ROOM_COLS = 30;
+const ROOM_ROWS = 18;
+
+// Mocks the Game Map interface so we can pass it to RenderRegistry functions
+class MockMap {
+    constructor(data) {
+        this.data = data; // 2D array of IDs
+        this.cols = ROOM_COLS;
+        this.rows = ROOM_ROWS;
+        this.bouncingTiles = {};
+        this.visible = Array(ROOM_ROWS).fill().map(()=>Array(ROOM_COLS).fill(true));
+    }
+    
+    getTile(x, y) {
+        if(x<0 || x>=this.cols || y<0 || y>=this.rows) return 0;
+        return this.data[y][x];
+    }
+    
+    isRevealed(x, y) { return true; } // Editor always sees all
+    isSpikeDestroyed(x, y) { return false; } // Editor spikes always intact
+}
 
 let worldData = {
     "0,0": Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0))
 };
 
-/**
- * ------------------------------------------------------------------
- * APPLICATION STATE
- * ------------------------------------------------------------------
- */
 const app = {
-    mode: 'world', // 'world' or 'room'
+    mode: 'world',
     curRx: 0,
     curRy: 0,
     selectedTile: 1,
     tool: 'pencil',
     isDrawing: false,
-    
-    // Performance Tracking
-    lastPaintedTile: { x: -1, y: -1 },
-    
-    // History (Undo/Redo)
     history: [],
     redoStack: [],
-    MAX_HISTORY: 50,
+    clipboard: null,
     
-    // Clipboard for Room Data
-    clipboard: null, 
-
-    // Canvas Contexts
     ctxRoom: document.getElementById('room-canvas').getContext('2d'),
     ctxWorld: document.getElementById('world-canvas').getContext('2d'),
     ctxMini: document.getElementById('minimap-canvas').getContext('2d'),
     
-    // World View Camera
-    camX: 0,
-    camY: 0,
-    zoom: 0.5,
-    isDragging: false,
-    lastMouse: {x:0, y:0},
-    keys: {},
+    camX: 0, camY: 0, zoom: 0.5,
+    isDragging: false, lastMouse: {x:0, y:0}, keys: {},
 
     init() {
         this.renderPalette();
@@ -440,9 +586,7 @@ const app = {
         this.mode = m;
         document.getElementById('btn-mode-world').className = m === 'world' ? 'active' : '';
         document.getElementById('btn-mode-room').className = m === 'room' ? 'active' : '';
-        document.getElementById('status-bar').innerText = m === 'world' ? 
-            'Mode: World Map (Click/Drag to Nav. Double-click to Edit)' : 
-            'Mode: Room Editor (Left Click Draw, Right Click Erase)';
+        document.getElementById('status-bar').innerText = m === 'world' ? 'Mode: World Map' : 'Mode: Room Editor';
         
         document.getElementById('room-canvas').style.display = m === 'room' ? 'block' : 'none';
         document.getElementById('world-canvas').style.display = m === 'world' ? 'block' : 'none';
@@ -469,235 +613,45 @@ const app = {
         setTimeout(() => el.innerText = '', 2000);
     },
 
-    // --- UNDO / REDO SYSTEM ---
-
-    saveState() {
-        if (this.mode !== 'room') return;
-        const key = `${this.curRx},${this.curRy}`;
-        if (!worldData[key]) return;
-
-        // Deep copy the current room state
-        const state = worldData[key].map(row => [...row]);
-        this.history.push({ key, data: state });
-        
-        if (this.history.length > this.MAX_HISTORY) this.history.shift();
-        this.redoStack = []; // Clear redo on new action
-    },
-
-    undo() {
-        if (this.history.length === 0) {
-            this.showMessage("Nothing to Undo");
-            return;
-        }
-
-        const currentState = this.history.pop();
-        const key = currentState.key;
-        
-        // Save current state to redo stack before reverting
-        if (worldData[key]) {
-            this.redoStack.push({ key, data: worldData[key].map(row => [...row]) });
-        }
-
-        // Apply undo
-        worldData[key] = currentState.data;
-        
-        if (key === `${this.curRx},${this.curRy}`) {
-            this.drawRoom();
-            this.drawMinimap();
-        }
-        this.showMessage("Undo");
-    },
-
-    redo() {
-        if (this.redoStack.length === 0) {
-            this.showMessage("Nothing to Redo");
-            return;
-        }
-
-        const nextState = this.redoStack.pop();
-        const key = nextState.key;
-
-        // Save current to history again
-        if (worldData[key]) {
-            this.history.push({ key, data: worldData[key].map(row => [...row]) });
-        }
-
-        worldData[key] = nextState.data;
-
-        if (key === `${this.curRx},${this.curRy}`) {
-            this.drawRoom();
-            this.drawMinimap();
-        }
-        this.showMessage("Redo");
-    },
-
-    // --- ROOM ACTIONS ---
-    
-    copyRoom() {
-        const key = `${this.curRx},${this.curRy}`;
-        if (worldData[key]) {
-            this.clipboard = worldData[key].map(row => [...row]);
-            this.showMessage(`Copied Room ${key}`);
-        }
-    },
-
-    cutRoom() {
-        this.saveState(); 
-        const key = `${this.curRx},${this.curRy}`;
-        if (worldData[key]) {
-            this.clipboard = worldData[key].map(row => [...row]);
-            delete worldData[key];
-            this.showMessage(`Cut Room ${key}`);
-            this.refreshViews();
-        }
-    },
-
-    pasteRoom() {
-        if (!this.clipboard) return this.showMessage("Clipboard empty");
-        this.saveState(); 
-        const key = `${this.curRx},${this.curRy}`;
-        worldData[key] = this.clipboard.map(row => [...row]);
-        this.showMessage(`Pasted to ${key}`);
-        this.refreshViews();
-    },
-
-    deleteRoom() {
-        const key = `${this.curRx},${this.curRy}`;
-        if (worldData[key] && confirm(`Delete Room ${key} permanently?`)) {
-            this.saveState(); 
-            delete worldData[key];
-            this.showMessage(`Deleted Room ${key}`);
-            this.refreshViews();
-        }
-    },
-
-    clearRoomContent() {
-        const key = `${this.curRx},${this.curRy}`;
-        if(confirm(`Clear tiles in Room ${key}?`)) {
-            this.saveState();
-            worldData[key] = Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
-            this.refreshViews();
-            this.showMessage(`Cleared tiles in ${key}`);
-        }
-    },
-    
-    refreshViews() {
-        if (this.mode === 'world') this.drawWorld();
-        else { this.drawRoom(); this.drawMinimap(); }
-    },
-
-    selectRoom(x, y) {
-        this.curRx = x;
-        this.curRy = y;
-        this.refreshViews();
-    },
-
-    editCurrentRoom() {
-        const key = `${this.curRx},${this.curRy}`;
-        if (!worldData[key]) {
-            worldData[key] = Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
-        }
-        this.setMode('room');
-    },
-    
-    centerView() {
-        const cvs = document.getElementById('world-canvas');
-        this.camX = cvs.width/2;
-        this.camY = cvs.height/2;
-        this.drawWorld();
-    },
-
     // --- DRAWING LOGIC ---
 
     drawRoom() {
         if (this.mode !== 'room') return;
         const ctx = this.ctxRoom;
         const key = `${this.curRx},${this.curRy}`;
-        const data = worldData[key];
+        const data = worldData[key] || Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
         
-        // Clear canvas (Transparent/CSS background handles grid)
         ctx.clearRect(0,0, 480, 288);
         
-        if(data) {
-            for(let y=0; y<ROOM_ROWS; y++) {
-                if (!data[y]) continue; 
-                for(let x=0; x<ROOM_COLS; x++) {
-                    const tid = data[y][x];
-                    if (tid !== 0) this.drawTile(ctx, x*TILE_SIZE, y*TILE_SIZE, tid, TILE_SIZE);
+        // Create Adapter
+        const mockMap = new MockMap(data);
+
+        for(let y=0; y<ROOM_ROWS; y++) {
+            for(let x=0; x<ROOM_COLS; x++) {
+                const tid = data[y][x];
+                if (tid !== 0) {
+                    const def = getTileDef(tid);
+                    if(def) {
+                        const renderer = RenderRegistry.get(def.ren);
+                        if(renderer) {
+                            renderer(ctx, x*TILE_SIZE, y*TILE_SIZE, x, y, mockMap, def);
+                        } else {
+                            // Fallback
+                            ctx.fillStyle = "#f0f"; 
+                            ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        }
+                    }
                 }
             }
         }
         
-        // Draw Grid Overlay for better visibility (Optional)
+        // Grid
         ctx.strokeStyle = "rgba(255,255,255,0.05)";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for(let x=0; x<=ROOM_COLS; x++) { ctx.moveTo(x*TILE_SIZE,0); ctx.lineTo(x*TILE_SIZE, ROOM_H); }
-        for(let y=0; y<=ROOM_ROWS; y++) { ctx.moveTo(0, y*TILE_SIZE); ctx.lineTo(ROOM_W, y*TILE_SIZE); }
+        for(let x=0; x<=ROOM_COLS; x++) { ctx.moveTo(x*TILE_SIZE,0); ctx.lineTo(x*TILE_SIZE, 288); }
+        for(let y=0; y<=ROOM_ROWS; y++) { ctx.moveTo(0, y*TILE_SIZE); ctx.lineTo(480, y*TILE_SIZE); }
         ctx.stroke();
-    },
-
-    drawTile(ctx, x, y, id, size) {
-        const def = TILE_DEF[id];
-        if(!def) return;
-        
-        if (CUSTOM_SPRITES[id]) {
-            ctx.drawImage(CUSTOM_SPRITES[id], x, y, size, size);
-        } else {
-            // Background color fill
-            if (def.color) {
-                ctx.fillStyle = def.color;
-                if (def.alpha) ctx.globalAlpha = def.alpha;
-                
-                if (def.height) {
-                    // Platform style (top part)
-                    ctx.fillRect(x, y, size, def.height);
-                } else if(def.style === "spike") {
-                    // Draw nothing here, handled below
-                } else {
-                    // Full block
-                    ctx.fillRect(x, y, size, size);
-                }
-                ctx.globalAlpha = 1.0;
-            }
-
-            // --- Specific Shapes & Symbols ---
-            
-            // Symbol (Text)
-            if (def.symbol) {
-                ctx.fillStyle = "#fff";
-                ctx.font = "bold 12px monospace";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText(def.symbol, x + size/2, y + size/2);
-            }
-
-            // Ladder
-            if (def.style === 'ladder') {
-                ctx.fillStyle = "rgba(0,0,0,0.3)";
-                ctx.fillRect(x + 4, y, 2, size);
-                ctx.fillRect(x + 10, y, 2, size);
-                for(let i=2; i<size; i+=4) ctx.fillRect(x+4, y+i, 8, 2);
-            }
-
-            // Spike (Triangle/X)
-            if (def.style === 'spike') {
-                ctx.fillStyle = def.color || "#f00";
-                ctx.beginPath();
-                // Upward triangle
-                ctx.moveTo(x + 2, y + size);
-                ctx.lineTo(x + size/2, y + 2);
-                ctx.lineTo(x + size - 2, y + size);
-                ctx.closePath();
-                ctx.fill();
-            }
-            
-            // Border for solid blocks
-            if (!def.symbol && !def.height && !def.style && id !== 0) {
-                ctx.strokeStyle = "rgba(0,0,0,0.3)";
-                ctx.strokeRect(x, y, size, size);
-            }
-        }
     },
 
     drawWorld() {
@@ -721,12 +675,8 @@ const app = {
         const startY = (this.camY % cellH) - cellH;
 
         ctx.beginPath();
-        for(let x = startX; x < cvs.width + cellW; x += cellW) {
-            ctx.moveTo(x, 0); ctx.lineTo(x, cvs.height);
-        }
-        for(let y = startY; y < cvs.height + cellH; y += cellH) {
-            ctx.moveTo(0, y); ctx.lineTo(cvs.width, y);
-        }
+        for(let x = startX; x < cvs.width + cellW; x += cellW) { ctx.moveTo(x, 0); ctx.lineTo(x, cvs.height); }
+        for(let y = startY; y < cvs.height + cellH; y += cellH) { ctx.moveTo(0, y); ctx.lineTo(cvs.width, y); }
         ctx.stroke();
 
         // Origin Lines
@@ -756,15 +706,23 @@ const app = {
                 for(let r=0; r<ROOM_ROWS; r++) {
                     if (!rData[r]) continue;
                     for(let c=0; c<ROOM_COLS; c++) {
-                        if (rData[r][c] !== 0) {
-                            ctx.fillStyle = TILE_DEF[rData[r][c]] ? (TILE_DEF[rData[r][c]].color || 'transparent') : '#888';
-                            if(ctx.fillStyle !== 'transparent') ctx.fillRect(scX + c*pSize, scY + r*pSize, pSize, pSize);
+                        const tid = rData[r][c];
+                        if (tid !== 0 && TILE_DEF[tid]) {
+                            const def = TILE_DEF[tid];
+                            // Try to guess a representative color for preview
+                            if (def.col === COLLISION_TYPE.SOLID) ctx.fillStyle = COLORS.tileDark;
+                            else if (def.col === COLLISION_TYPE.LIQUID) ctx.fillStyle = COLORS.waterSurface;
+                            else if (def.col === COLLISION_TYPE.HAZARD) ctx.fillStyle = COLORS.spike;
+                            else ctx.fillStyle = "#888";
+                            
+                            // If it's a generated tile with raw fillStyle in render, we can't easily guess, so default to gray
+                            
+                            ctx.fillRect(scX + c*pSize, scY + r*pSize, pSize, pSize);
                         }
                     }
                 }
             }
             
-            // Label
             if (this.zoom > 0.6) {
                 ctx.fillStyle = "white";
                 ctx.font = `${10*this.zoom}px monospace`;
@@ -772,44 +730,29 @@ const app = {
             }
         }
 
-        // Selection
         const selScX = this.camX + (this.curRx * cellW);
         const selScY = this.camY + (this.curRy * cellH);
         
         ctx.strokeStyle = "#00ff00";
         ctx.lineWidth = 3;
         ctx.strokeRect(selScX, selScY, roomW, roomH);
-        
-        ctx.fillStyle = "#0f0";
-        ctx.font = `${12}px monospace`;
-        ctx.fillText(`SEL: ${this.curRx},${this.curRy}`, selScX, selScY - 5);
     },
 
     drawMinimap() {
         const ctx = this.ctxMini;
         const cvs = document.getElementById('minimap-canvas');
-        
-        // Clear transparency
         ctx.clearRect(0,0,cvs.width, cvs.height);
         
-        // Larger Minimap: Show 5x5 grid or 3x3 but bigger
-        const range = 1; // 1 = 3x3 grid
-        const visualScale = 1.5; // Scale up the minimap visual
-        const roomPixW = 30 * visualScale; 
-        const roomPixH = 18 * visualScale; 
-        
+        const roomPixW = 45; // Scale for minimap
+        const roomPixH = 27; 
         const centerX = cvs.width / 2;
         const centerY = cvs.height / 2;
 
-        const rangeArr = [-1, 0, 1];
-        
-        rangeArr.forEach(dy => {
-            rangeArr.forEach(dx => {
+        for(let dy=-1; dy<=1; dy++) {
+            for(let dx=-1; dx<=1; dx++) {
                 const tx = this.curRx + dx;
                 const ty = this.curRy + dy;
                 const key = `${tx},${ty}`;
-                
-                // Calculate position relative to center
                 const drawX = centerX + (dx * roomPixW) - (roomPixW/2);
                 const drawY = centerY + (dy * roomPixH) - (roomPixH/2);
                 
@@ -829,25 +772,20 @@ const app = {
                         if (!rData[r]) continue;
                         for(let c=0; c<ROOM_COLS; c++) {
                             const tid = rData[r][c];
-                            if (tid !== 0 && TILE_DEF[tid]) {
-                                ctx.fillStyle = TILE_DEF[tid].color || 'transparent';
-                                if(ctx.fillStyle !== 'transparent') 
-                                    ctx.fillRect(drawX + c*dotW, drawY + r*dotH, Math.ceil(dotW), Math.ceil(dotH));
+                            if (tid !== 0) {
+                                ctx.fillStyle = "#888";
+                                ctx.fillRect(drawX + c*dotW, drawY + r*dotH, Math.ceil(dotW), Math.ceil(dotH));
                             }
                         }
                     }
-                } else if(dx===0 && dy===0) {
-                     ctx.fillStyle = "rgba(17,17,17,0.9)";
-                     ctx.fillRect(drawX, drawY, roomPixW, roomPixH);
                 }
-                
                 if(dx===0 && dy===0) {
                     ctx.strokeStyle = "#0f0";
                     ctx.lineWidth = 2;
                     ctx.strokeRect(drawX, drawY, roomPixW, roomPixH);
                 }
-            });
-        });
+            }
+        }
     },
 
     // --- INTERACTION ---
@@ -857,42 +795,41 @@ const app = {
         p.innerHTML = '';
         Object.keys(TILE_DEF).forEach(k => {
             const def = TILE_DEF[k];
-            // Skip rendering Air in palette if you want, but useful to have 'Eraser' effectively
             const div = document.createElement('div');
             div.className = `p-btn ${parseInt(k) === this.selectedTile ? 'active' : ''}`;
             
-            if (CUSTOM_SPRITES[k]) {
-                const img = document.createElement('img');
-                img.src = CUSTOM_SPRITES[k].src;
-                div.appendChild(img);
+            // Generate Preview
+            const cvs = document.createElement('canvas');
+            cvs.width = 16; cvs.height = 16;
+            const ctx = cvs.getContext('2d');
+            
+            // Use the actual render function for preview!
+            const renderer = RenderRegistry.get(def.ren);
+            if(renderer) {
+                // Mock map for preview
+                const mock = new MockMap([[]]); 
+                // We need to fool the renderer for context aware tiles
+                mock.getTile = () => parseInt(k); 
                 
-                // Show char code for custom sprites
-                if (EXPORT_MAP[k]) {
-                    const charBadge = document.createElement('div');
-                    charBadge.innerText = EXPORT_MAP[k];
-                    charBadge.style.position = 'absolute';
-                    charBadge.style.bottom = '0';
-                    charBadge.style.right = '0';
-                    charBadge.style.background = 'rgba(0,0,0,0.7)';
-                    charBadge.style.fontSize = '8px';
-                    charBadge.style.padding = '1px 3px';
-                    div.appendChild(charBadge);
+                try {
+                    renderer(ctx, 0, 0, 0, 0, mock, def);
+                } catch(e) {
+                    ctx.fillStyle = "#f00"; ctx.fillRect(0,0,16,16);
                 }
             } else {
-                div.style.backgroundColor = def.color || '#222'; // Dark bg for Air
-                if(def.symbol) div.innerText = def.symbol;
-                else if (def.style === 'spike') div.innerText = "X"; // Special case for Spike icon
-                else div.innerText = def.name.substring(0,2);
-                
-                // Special style for Air in palette
-                if (k === "0") {
-                   div.innerText = "Air";
-                   div.style.color = "#666";
-                   div.style.border = "1px dashed #444";
-                }
+                ctx.fillStyle = "#333"; ctx.fillRect(0,0,16,16);
             }
             
+            div.appendChild(cvs);
             div.title = `${def.name} (ID: ${k})`;
+            // Show custom tag if it has an export char assigned
+            if (def.exportChar) {
+                 const tag = document.createElement('div');
+                 tag.style = "position:absolute; bottom:0; right:0; font-size:8px; background:rgba(0,0,0,0.8); color:#0f0;";
+                 tag.innerText = def.exportChar;
+                 div.appendChild(tag);
+            }
+
             div.onclick = () => {
                 this.selectedTile = parseInt(k);
                 this.renderPalette();
@@ -902,7 +839,6 @@ const app = {
     },
 
     setupInputs() {
-        // Keyboard
         window.addEventListener('keydown', e => {
             if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             this.keys[e.code] = true;
@@ -916,18 +852,14 @@ const app = {
                     case 'KeyY': e.preventDefault(); this.redo(); break;
                 }
             }
-            if (e.code === 'Delete' || e.code === 'Backspace') {
-                e.preventDefault();
-                this.deleteRoom();
-            }
-            // Tool Shortcuts
+            if (e.code === 'Delete' || e.code === 'Backspace') { e.preventDefault(); this.deleteRoom(); }
             if (e.code === 'KeyP') this.setTool('pencil');
             if (e.code === 'KeyB') this.setTool('bucket');
         });
         
         window.addEventListener('keyup', e => this.keys[e.code] = false);
 
-        // WORLD CANVAS
+        // World Canvas Events
         const wCvs = document.getElementById('world-canvas');
         wCvs.addEventListener('contextmenu', e => e.preventDefault());
         wCvs.addEventListener('mousedown', e => {
@@ -938,7 +870,6 @@ const app = {
                 wCvs.style.cursor = 'grabbing';
             }
         });
-        
         window.addEventListener('mousemove', e => {
             if (this.isDragging && this.mode === 'world') {
                 const dx = e.clientX - this.lastMouse.x;
@@ -949,41 +880,22 @@ const app = {
                 this.drawWorld();
             }
         });
-
         window.addEventListener('mouseup', () => {
             this.isDragging = false;
             this.isDrawing = false;
             wCvs.style.cursor = 'grab';
         });
-        
         wCvs.addEventListener('click', e => {
             if (e.button !== 0 || this.keys['Space'] || this.isDragging) return; 
             const rect = wCvs.getBoundingClientRect();
-            const mx = e.clientX - rect.left;
-            const my = e.clientY - rect.top;
-            
-            const cellW = (60 * this.zoom) + (4 * this.zoom);
-            const cellH = (36 * this.zoom) + (4 * this.zoom);
-            
-            const gridX = Math.round((mx - this.camX) / cellW);
-            const gridY = Math.round((my - this.camY) / cellH);
+            const gridX = Math.round((e.clientX - rect.left - this.camX) / ((64)*this.zoom));
+            const gridY = Math.round((e.clientY - rect.top - this.camY) / ((40)*this.zoom));
             this.selectRoom(gridX, gridY);
         });
-
         wCvs.addEventListener('dblclick', e => {
             if (e.button !== 0) return;
-            const rect = wCvs.getBoundingClientRect();
-            const mx = e.clientX - rect.left;
-            const my = e.clientY - rect.top;
-            const cellW = (60 * this.zoom) + (4 * this.zoom);
-            const cellH = (36 * this.zoom) + (4 * this.zoom);
-            
-            const gridX = Math.round((mx - this.camX) / cellW);
-            const gridY = Math.round((my - this.camY) / cellH);
-            this.selectRoom(gridX, gridY);
             this.editCurrentRoom();
         });
-
         wCvs.addEventListener('wheel', e => {
             e.preventDefault();
             const rect = wCvs.getBoundingClientRect();
@@ -1000,72 +912,40 @@ const app = {
             this.drawWorld();
         });
 
-        // ROOM CANVAS (FIXED PERFORMANCE)
+        // Room Canvas Events
         const rCvs = document.getElementById('room-canvas');
-        
-        const getTileCoords = (e) => {
+        const paint = (e, isClick) => {
             const rect = rCvs.getBoundingClientRect();
             const scaleX = rCvs.width / rect.width;
             const scaleY = rCvs.height / rect.height;
-            return {
-                x: Math.floor(((e.clientX - rect.left) * scaleX) / TILE_SIZE),
-                y: Math.floor(((e.clientY - rect.top) * scaleY) / TILE_SIZE)
-            };
-        };
-
-        const paint = (e, isClick) => {
-            const {x, y} = getTileCoords(e);
+            const x = Math.floor(((e.clientX - rect.left) * scaleX) / TILE_SIZE);
+            const y = Math.floor(((e.clientY - rect.top) * scaleY) / TILE_SIZE);
+            
             if(x<0 || x>=ROOM_COLS || y<0 || y>=ROOM_ROWS) return;
             
-            // PERFORMANCE FIX: 
-            // 1. If dragging, don't repaint the same tile over and over
-            if (!isClick && x === this.lastPaintedTile.x && y === this.lastPaintedTile.y) return;
-            
-            this.lastPaintedTile = { x, y };
-
             const key = `${this.curRx},${this.curRy}`;
-            // SAFETY FIX: Ensure room data exists before painting to prevent crash/freeze
-            if (!worldData[key]) {
-                worldData[key] = Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
-            }
-            if (!worldData[key][y]) {
-                // Should not happen if init correctly, but safety first
-                return;
-            }
-
-            let val = this.selectedTile;
-            if (e.buttons === 2) val = 0; 
+            if (!worldData[key]) worldData[key] = Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
             
-            // CRITICAL FIX: Only flood fill on initial click, NEVER on drag
-            if (this.tool === 'bucket') {
-                if (isClick && e.buttons === 1) {
-                    this.floodFill(x, y, val);
-                    this.drawRoom();
-                    this.drawMinimap();
-                }
+            let val = this.selectedTile;
+            // Right click removed from erase logic
+            if (e.buttons === 2) return; 
+
+            if (this.tool === 'bucket' && isClick && e.buttons === 1) {
+                this.floodFill(x, y, val);
             } else {
-                // Pencil
-                if (worldData[key][y][x] !== val) {
-                    worldData[key][y][x] = val;
-                    this.drawRoom();
-                    this.drawMinimap();
-                }
+                worldData[key][y][x] = val;
             }
+            this.drawRoom();
+            this.drawMinimap();
         };
 
         rCvs.addEventListener('mousedown', e => {
-            // Save state for UNDO before modifying
-            if (e.button === 0 || e.button === 2) {
-                this.saveState();
-            }
-
+            if (e.buttons === 2) return; // Ignore right click start
+            this.saveState();
             this.isDrawing = true;
-            this.lastPaintedTile = {x: -1, y: -1}; // Reset
             paint(e, true);
         });
-        rCvs.addEventListener('mousemove', e => {
-            if(this.isDrawing) paint(e, false);
-        });
+        rCvs.addEventListener('mousemove', e => { if(this.isDrawing) paint(e, false); });
         rCvs.addEventListener('contextmenu', e => e.preventDefault());
     },
 
@@ -1074,7 +954,6 @@ const app = {
         const grid = worldData[key];
         const target = grid[y][x];
         if(target === val) return;
-        
         const stack = [[x,y]];
         while(stack.length) {
             const [cx, cy] = stack.pop();
@@ -1084,7 +963,70 @@ const app = {
                 stack.push([cx+1,cy], [cx-1,cy], [cx,cy+1], [cx,cy-1]);
             }
         }
-    }
+    },
+
+    // Standard CRUD
+    saveState() {
+        if (this.mode !== 'room') return;
+        const key = `${this.curRx},${this.curRy}`;
+        if (!worldData[key]) return;
+        const state = worldData[key].map(row => [...row]);
+        this.history.push({ key, data: state });
+        if (this.history.length > 50) this.history.shift();
+        this.redoStack = [];
+    },
+    undo() {
+        if (this.history.length === 0) return this.showMessage("Nothing to Undo");
+        const s = this.history.pop();
+        this.redoStack.push({ key: s.key, data: worldData[s.key].map(r => [...r]) });
+        worldData[s.key] = s.data;
+        if (s.key === `${this.curRx},${this.curRy}`) this.drawRoom();
+        this.showMessage("Undo");
+    },
+    redo() {
+        if (this.redoStack.length === 0) return this.showMessage("Nothing to Redo");
+        const s = this.redoStack.pop();
+        this.history.push({ key: s.key, data: worldData[s.key].map(r => [...r]) });
+        worldData[s.key] = s.data;
+        if (s.key === `${this.curRx},${this.curRy}`) this.drawRoom();
+        this.showMessage("Redo");
+    },
+    copyRoom() {
+        const key = `${this.curRx},${this.curRy}`;
+        if (worldData[key]) {
+            this.clipboard = worldData[key].map(row => [...row]);
+            this.showMessage("Copied");
+        }
+    },
+    cutRoom() {
+        this.copyRoom();
+        this.clearRoomContent();
+    },
+    pasteRoom() {
+        if (!this.clipboard) return;
+        this.saveState();
+        worldData[`${this.curRx},${this.curRy}`] = this.clipboard.map(row => [...row]);
+        this.drawRoom();
+        this.showMessage("Pasted");
+    },
+    deleteRoom() {
+        if(confirm("Delete Room?")) {
+             delete worldData[`${this.curRx},${this.curRy}`];
+             this.drawRoom();
+             this.drawWorld();
+        }
+    },
+    clearRoomContent() {
+        this.saveState();
+        worldData[`${this.curRx},${this.curRy}`] = Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
+        this.drawRoom();
+    },
+    selectRoom(x, y) { this.curRx = x; this.curRy = y; if(this.mode==='room') this.drawRoom(); else this.drawWorld(); },
+    editCurrentRoom() { 
+        if(!worldData[`${this.curRx},${this.curRy}`]) worldData[`${this.curRx},${this.curRy}`] = Array(ROOM_ROWS).fill().map(() => Array(ROOM_COLS).fill(0));
+        this.setMode('room'); 
+    },
+    centerView() { this.camX = document.getElementById('world-canvas').width/2; this.camY = document.getElementById('world-canvas').height/2; }
 };
 
 const pixelEditor = {
@@ -1093,20 +1035,28 @@ const pixelEditor = {
     gridSize: 16,
     pixels: [],
     currentColor: '#ffffff',
-    paletteColors: ['#000000', '#111122', '#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff', '#ff00ff', '#444455', '#d4af37'],
 
     init() {
         const palContainer = document.getElementById('pe-palette');
-        this.paletteColors.forEach(c => {
+        const colorKeys = Object.keys(COLORS).filter(k => typeof COLORS[k] === 'string');
+        colorKeys.forEach(k => {
             const s = document.createElement('div');
             s.className = 'color-swatch';
-            s.style.backgroundColor = c;
+            s.style.backgroundColor = COLORS[k];
+            s.title = k;
             s.onclick = () => {
-                this.currentColor = c;
+                this.currentColor = COLORS[k];
                 document.querySelectorAll('.color-swatch').forEach(el=>el.classList.remove('active'));
                 s.classList.add('active');
             };
             palContainer.appendChild(s);
+        });
+
+        const customPicker = document.getElementById('pe-custom-color');
+        customPicker.addEventListener('input', (e) => {
+            this.currentColor = e.target.value;
+            // Deselect palettes
+            document.querySelectorAll('.color-swatch').forEach(el=>el.classList.remove('active'));
         });
 
         let drawing = false;
@@ -1116,11 +1066,21 @@ const pixelEditor = {
             const x = Math.floor((e.clientX - rect.left) * scale / (this.canvas.width/this.gridSize));
             const y = Math.floor((e.clientY - rect.top) * scale / (this.canvas.height/this.gridSize));
             if(x<0||x>=this.gridSize||y<0||y>=this.gridSize) return;
-            this.pixels[y][x] = (e.buttons === 2) ? null : this.currentColor;
+
+            // Handle Right Click Erase
+            if (e.buttons === 2) {
+                this.pixels[y][x] = null; // Erase
+            } else if (e.buttons === 1) {
+                this.pixels[y][x] = this.currentColor;
+            }
+            
             this.render();
         };
 
-        this.canvas.addEventListener('mousedown', e => { drawing = true; paint(e); });
+        this.canvas.addEventListener('mousedown', e => { 
+            // Allow right click now
+            drawing = true; paint(e); 
+        });
         this.canvas.addEventListener('mousemove', e => { if(drawing) paint(e); });
         window.addEventListener('mouseup', () => drawing = false);
         this.canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -1129,9 +1089,6 @@ const pixelEditor = {
     open() {
         document.getElementById('pixel-editor-panel').style.display = 'flex';
         this.pixels = Array(this.gridSize).fill().map(() => Array(this.gridSize).fill(null));
-        const keys = Object.keys(TILE_DEF).map(Number).sort((a,b)=>a-b);
-        document.getElementById('pe-id').value = keys[keys.length-1] + 1;
-        document.getElementById('pe-char').value = '';
         this.render();
     },
 
@@ -1143,12 +1100,16 @@ const pixelEditor = {
         const pSize = w / this.gridSize;
         this.ctx.fillStyle = '#333';
         this.ctx.fillRect(0,0,w,h);
+        
+        // Grid
         this.ctx.fillStyle = '#444';
         for(let y=0; y<this.gridSize; y++) {
             for(let x=0; x<this.gridSize; x++) {
                 if((x+y)%2===0) this.ctx.fillRect(x*pSize, y*pSize, pSize, pSize);
             }
         }
+        
+        // Pixels
         for(let y=0; y<this.gridSize; y++) {
             for(let x=0; x<this.gridSize; x++) {
                 if(this.pixels[y][x]) {
@@ -1157,6 +1118,7 @@ const pixelEditor = {
                 }
             }
         }
+        
         this.ctx.strokeStyle = 'rgba(255,255,255,0.1)';
         this.ctx.beginPath();
         for(let i=0; i<=this.gridSize; i++) {
@@ -1167,313 +1129,280 @@ const pixelEditor = {
     },
 
     save() {
-        const id = parseInt(document.getElementById('pe-id').value);
-        const name = document.getElementById('pe-name').value;
-        const char = document.getElementById('pe-char').value;
-        const type = document.getElementById('pe-type').value;
-        const typeName = document.getElementById('pe-type').options[document.getElementById('pe-type').selectedIndex].text;
+        const name = document.getElementById('pe-name').value.replace(/\s+/g, '');
+        const type = parseInt(document.getElementById('pe-type').value);
+        const inputId = parseInt(document.getElementById('pe-id').value);
+        const inputChar = document.getElementById('pe-char').value;
 
-        if(!id || !name) return alert("ID and Name required");
+        if(!name) return alert("Name required");
+        if(!inputId || !inputChar) return alert("ID and Char required");
         
-        // --- Validation: Check if Char is used ---
-        if (char && IMPORT_MAP[char] && IMPORT_MAP[char] !== id) {
-            return alert(`Error: Character '${char}' is already used by ID ${IMPORT_MAP[char]}.`);
+        // Validation (Soft check)
+        if(TILE_DEF[inputId]) {
+            if(!confirm(`ID ${inputId} exists (${TILE_DEF[inputId].name}). Overwrite in editor?`)) return;
         }
-        
-        // --- Validation: Check if ID is used ---
-        if (TILE_DEF[id] && !confirm(`ID ${id} already exists (${TILE_DEF[id].name}). Overwrite?`)) return;
 
-        const tmpCanvas = document.createElement('canvas');
-        tmpCanvas.width = 16; tmpCanvas.height = 16;
-        const tCtx = tmpCanvas.getContext('2d');
+        const newId = inputId;
+        const char = inputChar;
+
+        // 3. Register locally in Editor
+        // We use the same ID for render style for simplicity
+        const renderStyleId = newId; 
+        
+        // Compile Pixel Data to JS Code
+        let drawCommands = "";
+        let fill = "";
         for(let y=0; y<16; y++) {
             for(let x=0; x<16; x++) {
-                if(this.pixels[y][x]) {
-                    tCtx.fillStyle = this.pixels[y][x];
-                    tCtx.fillRect(x,y,1,1);
+                const c = this.pixels[y][x];
+                if(c) {
+                    if (c !== fill) {
+                        drawCommands += `ctx.fillStyle = '${c}'; `;
+                        fill = c;
+                    }
+                    drawCommands += `ctx.fillRect(tx+${x}, ty+${y}, 1, 1); `;
                 }
             }
         }
-        const dataURL = tmpCanvas.toDataURL();
-        const imgObj = new Image();
-        imgObj.src = dataURL;
-        CUSTOM_SPRITES[id] = imgObj;
+        
+        // Create the Runtime Strategy
+        RenderRegistry.register(renderStyleId, new Function('ctx', 'tx', 'ty', 'x', 'y', 'map', 'def', drawCommands));
 
-        // Register Mapping
-        if (char) {
-            TileCodec.registerMapping(id, char);
-        }
-
-        TILE_DEF[id] = { 
-            name: name, 
-            color: '#fff', 
-            code: typeName, 
-            customData: dataURL, 
-            collisionId: parseInt(type),
-            char: char 
+        // Update Editor Defs
+        TILE_DEF[newId] = {
+            name: name,
+            col: type,
+            ren: renderStyleId,
+            exportChar: char // Store strictly for export
         };
+        // Update local mapping for the editor session
+        TILE_DATA_MAP[char] = newId;
+        TILE_DATA_MAP[newId] = newId; 
+
+        // 4. Store Data for tile.js Patcher
+        NEW_TILES_LIST.push({
+            id: newId,
+            char: char,
+            name: name,
+            col: type,
+            code: drawCommands
+        });
+
         app.renderPalette();
         this.close();
-        app.showMessage(`Saved custom tile ${name} (${char || id})`);
+        app.showMessage(`Saved ${name} as '${char}'`);
     }
 };
 
 const dataManager = {
-    fileHandle: null,
+    originalTileJs: null,
 
-    openImport() { document.getElementById('json-modal').style.display = 'block'; },
+    openSmart() { document.getElementById('file-loader').click(); },
     
-    // Legacy / Basic Input handler
     onFileSelected(input) {
         const file = input.files[0];
         if(!file) return;
-        this.fileHandle = null; // Basic input cannot overwrite, so nullify handle
+        const reader = new FileReader();
+        reader.onload = (e) => this.parseData(e.target.result);
+        reader.readAsText(file);
+    },
+
+    onTileJsSelected(input) {
+        const file = input.files[0];
+        if(!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
-            const txt = e.target.result;
-            this.parseData(txt);
+            this.originalTileJs = e.target.result;
+            document.getElementById('tile-js-status').style.display = 'none';
+            alert("tile.js loaded. You can now save patched versions.");
         };
         reader.readAsText(file);
     },
 
-    // Native API (Smart Wrapper)
-    async openSmart() {
-        // Feature detection for File System Access API (Chrome/Edge/Opera)
-        if ('showOpenFilePicker' in window) {
-            try {
-                const [handle] = await window.showOpenFilePicker({
-                    types: [{ description: 'JS/JSON', accept: {'text/javascript': ['.js', '.json', '.txt']} }]
-                });
-                this.fileHandle = handle;
-                const file = await handle.getFile();
-                const text = await file.text();
-                this.parseData(text);
-            } catch(e) { 
-                // User cancelled or error
-                if (e.name !== 'AbortError') console.error(e);
-            }
-        } else {
-            // Fallback for Safari/Firefox: Trigger the hidden file input
-            // This allows the user to still open files seamlessly
-            document.getElementById('file-loader').click();
-        }
+    openImport() { document.getElementById('json-modal').style.display = 'block'; },
+    
+    processImport() {
+        this.parseData(document.getElementById('json-io').value);
+        document.getElementById('json-modal').style.display = 'none';
     },
 
-    processImport() {
-        const txt = document.getElementById('json-io').value;
-        this.fileHandle = null; // Text import cannot overwrite file
-        this.parseData(txt);
-    },
-    
     parseData(txt) {
         try {
             let jsonStr = txt;
-            
-            // ROBUST PARSING FIX: 
             if (txt.includes("WORLD_LAYOUTS =")) {
                 const start = txt.indexOf("{", txt.indexOf("WORLD_LAYOUTS"));
-                if (start !== -1) {
-                    let braceCount = 0;
-                    let end = -1;
-                    for (let i = start; i < txt.length; i++) {
-                        if (txt[i] === '{') braceCount++;
-                        else if (txt[i] === '}') {
-                            braceCount--;
-                            if (braceCount === 0) {
-                                end = i;
-                                break;
-                            }
+                let count = 0;
+                for(let i=start; i<txt.length; i++) {
+                    if(txt[i]==='{') count++;
+                    if(txt[i]==='}') count--;
+                    if(count===0 && i > start) {
+                        jsonStr = txt.substring(start, i+1);
+                        break;
+                    }
+                }
+            }
+            
+            const strictJson = jsonStr.replace(/([a-zA-Z0-9_-]+):/g, '"$1":').replace(/'/g, '"');
+            const data = JSON.parse(strictJson);
+
+            const newData = {};
+            for(let key in data) {
+                newData[key] = data[key].map(rowStr => {
+                    if(Array.isArray(rowStr)) return rowStr; 
+                    return rowStr.split('').map(char => {
+                        return getTileValue(char);
+                    });
+                });
+            }
+            
+            worldData = newData;
+            app.renderPalette();
+            app.selectRoom(0,0);
+            alert("Map Loaded!");
+
+        } catch(e) {
+            console.error(e);
+            alert("Parse error. Check console.");
+        }
+    },
+
+    saveWithUI() { 
+        const status = document.getElementById('tile-js-status');
+        if(!this.originalTileJs) {
+            status.style.display = 'block';
+            status.innerText = "Warning: tile.js not loaded. Cannot patch tile definitions.";
+        } else {
+            status.style.display = 'none';
+        }
+        document.getElementById('save-modal').style.display = 'flex'; 
+    },
+
+    saveMap() {
+        document.getElementById('save-modal').style.display = 'none';
+        
+        let content = `// Generated by BOSS Editor\n`;
+        content += `const WORLD_LAYOUTS = {\n`;
+        
+        const keys = Object.keys(worldData).sort((a,b) => {
+            const [ax,ay] = a.split(',').map(Number);
+            const [bx,by] = b.split(',').map(Number);
+            return ay === by ? ax - bx : ay - by;
+        });
+
+        keys.forEach((key, i) => {
+            content += `    "${key}": [\n`;
+            worldData[key].forEach((row, ri) => {
+                const rowStr = row.map(id => {
+                    // BUG FIX: Prioritize the exportChar defined in TILE_DEF
+                    if (TILE_DEF[id] && TILE_DEF[id].exportChar) {
+                        return TILE_DEF[id].exportChar;
+                    }
+                    // Fallback to searching the map
+                    const entry = Object.entries(TILE_DATA_MAP).find(([k, v]) => v === id && k.length === 1);
+                    return entry ? entry[0] : (id === 0 ? '0' : '?');
+                }).join('');
+                content += `        "${rowStr}"${ri < 17 ? ',' : ''}\n`;
+            });
+            content += `    ]${i < keys.length-1 ? ',' : ''}\n`;
+        });
+        content += `};\n`;
+
+        this.download(content, 'rooms.js');
+    },
+
+    savePatchedTileJs() {
+        if (!this.originalTileJs) {
+            alert("Please load the original tile.js first using the 'LOAD TILE.JS' button.");
+            return;
+        }
+
+        let content = this.originalTileJs;
+
+        // Iterate through all new tiles created in this session
+        NEW_TILES_LIST.forEach(tile => {
+            // 1. Inject into TILE_DATA_MAP
+            // Strategy: Find "const TILE_DATA_MAP = {" ... find the first "};" after that.
+            const mapStart = content.indexOf("const TILE_DATA_MAP = {");
+            if (mapStart !== -1) {
+                const mapEnd = content.indexOf("};", mapStart);
+                if (mapEnd !== -1) {
+                    const injection = `    '${tile.char}': ${tile.id},\n`;
+                    content = content.slice(0, mapEnd) + injection + content.slice(mapEnd);
+                }
+            }
+
+            // 2. Inject into TILE_DEF
+            // Strategy: Find "const TILE_DEF = {" ... find the first "};" after that.
+            // Note: TILE_DEF contains objects, so we must match braces carefully or just use the structure provided
+            // The provided tile.js ends TILE_DEF with "};" at the root level.
+            // A simple hack is to find the LAST occurrence of "};" inside the file context if we assume structure
+            // BUT safer: Find "const TILE_DEF" then regex search for the closing brace. 
+            // Given the known format, we look for the line starting with "};" after TILE_DEF
+            
+            // However, since we are appending lines inside the block, simply finding the last "};" relative to TILE_DEF start is risky if code follows.
+            // Let's rely on the specific indentation pattern or just the end of file? No.
+            
+            // Let's assume standard formatting from the provided file: "};" closes the block.
+            // We search for `const TILE_DEF = {`
+            // Then we search for `^};` (multiline) or just insert before the LAST `};` found if we assume it's near end of definitions section.
+            
+            // More Robust: Find "const TILE_DEF", count braces? Too complex for this snippet.
+            // Simple approach: Look for "99: { name: "Spike", ... }" or the last known key? 
+            // Better: Insert at the end of the TILE_DEF block.
+            // We'll search for "const TILE_DEF = {" and then the next "};" that appears at the start of a line.
+            const defStart = content.indexOf("const TILE_DEF = {");
+            if (defStart !== -1) {
+                // Find closing brace. It usually follows the last definition.
+                // We'll insert before the `};` that closes TILE_DEF.
+                // Because we modified content in step 1, indices shifted. Re-search.
+                let ptr = defStart;
+                let braceCount = 0;
+                let foundStart = false;
+                let closingIndex = -1;
+                
+                // Simple parser to find matching brace
+                for(let i=ptr; i<content.length; i++) {
+                    if(content[i] === '{') {
+                        braceCount++;
+                        foundStart = true;
+                    } else if(content[i] === '}') {
+                        braceCount--;
+                        if(foundStart && braceCount === 0) {
+                            closingIndex = i;
+                            break;
                         }
                     }
-                    if (end !== -1) {
-                        jsonStr = txt.substring(start, end+1);
-                    }
+                }
+
+                if (closingIndex !== -1) {
+                    const injection = `    ${tile.id}: { name: "${tile.name}", col: ${tile.col}, ren: ${tile.id} },\n`;
+                    content = content.slice(0, closingIndex) + injection + content.slice(closingIndex);
                 }
             }
             
-            try {
-                worldData = JSON.parse(jsonStr);
-            } catch(e) {
-                const fixed = jsonStr.replace(/([a-zA-Z0-9_-]+):/g, '"$1":');
-                worldData = JSON.parse(fixed);
-            }
-            
-            this.sanitizeData(); // NORMALIZE DATA
-            
-            alert("Data Loaded Successfully!");
-            app.history = []; // Clear undo history on new load
-            app.renderPalette(); // Refresh palette in case of new custom tiles
-            app.selectRoom(0,0);
-            document.getElementById('json-modal').style.display = 'none';
-        } catch(e) {
-            console.error(e);
-            alert("Failed to parse. Ensure content is a valid JSON object or the JS object from a saved file.");
-        }
-    },
-    
-    sanitizeData() {
-        // OPTIMIZED SANITIZATION using TileCodec
-        for (let key in worldData) {
-            if (!Array.isArray(worldData[key])) {
-                worldData[key] = []; 
-            }
-            
-            for (let y = 0; y < ROOM_ROWS; y++) {
-                let row = worldData[key][y];
-
-                // 1. Convert String rows to Array using Decoder
-                if (typeof row === 'string') {
-                    // Split string and map each char through decode
-                    row = row.split('').map(char => TileCodec.decode(char));
-                }
-                
-                // 2. Ensure it is an Array
-                if (!Array.isArray(row)) {
-                    row = Array(ROOM_COLS).fill(0);
-                }
-                
-                // 3. Normalize Length (Pad with 0s)
-                if (row.length < ROOM_COLS) {
-                    const missing = ROOM_COLS - row.length;
-                    for (let k = 0; k < missing; k++) row.push(0);
-                }
-                
-                // 4. Final Validation: Ensure every cell is a valid ID number
-                // This handles cases where mixed types might exist in an array
-                for (let x = 0; x < ROOM_COLS; x++) {
-                    row[x] = TileCodec.decode(row[x]);
-                }
-
-                // Write back the clean row
-                worldData[key][y] = row;
-            }
-        }
-    },
-
-    saveWithUI() {
-        // Always show the modal to allow Save As New options
-        document.getElementById('save-modal').style.display = 'flex';
-    },
-
-    async saveOverwrite() {
-        document.getElementById('save-modal').style.display = 'none';
-        if (!this.fileHandle) {
-            alert("No source file to overwrite. Using Save As instead.");
-            return this.saveAsNew();
-        }
-
-        const jsContent = this.generateOutput();
-        try {
-            const writable = await this.fileHandle.createWritable();
-            await writable.write(jsContent);
-            await writable.close();
-            app.showMessage("Saved to " + this.fileHandle.name);
-        } catch(e) {
-            console.error(e);
-            alert("Failed to overwrite. Please use Save As.");
-        }
-    },
-
-    async saveAsNew() {
-        document.getElementById('save-modal').style.display = 'none';
-        const jsContent = this.generateOutput();
-        
-        // 1. Try File System Access API (Save As...)
-        // Check if supported (Safari doesn't support this)
-        if ('showSaveFilePicker' in window) {
-            try {
-                const handle = await window.showSaveFilePicker({
-                    suggestedName: 'rooms.js',
-                    types: [{
-                        description: 'JavaScript File',
-                        accept: {'text/javascript': ['.js']}
-                    }]
-                });
-                const writable = await handle.createWritable();
-                await writable.write(jsContent);
-                await writable.close();
-                // Update current file handle to this new one so overwrite works next time
-                this.fileHandle = handle;
-                app.showMessage("File saved successfully.");
-                return;
-            } catch (err) {
-                if(err.name !== 'AbortError') console.error(err);
-                if(err.name === 'AbortError') return;
-            }
-        } 
-        
-        // 2. Fallback to Blob Download (Standard for Safari/Firefox)
-        this.download(jsContent);
-    },
-
-    generateOutput() {
-        let jsContent = `// -------------------------------------------\n`;
-        jsContent += `// AUTOMATICALLY GENERATED BY BOSS BUILDER\n`;
-        jsContent += `// -------------------------------------------\n\n`;
-        
-        jsContent += `const WORLD_LAYOUTS = {\n`;
-        const keys = Object.keys(worldData).sort();
-        keys.forEach((key, i) => {
-            if (!Array.isArray(worldData[key])) return;
-            
-            jsContent += `    "${key}": [\n`;
-            worldData[key].forEach((row, ri) => {
-                // EXPORT AS STRING LOGIC (Optimized)
-                // Use TileCodec.encode to handle specific mappings (like 99 -> 'x')
-                const rowStr = row.map(cell => TileCodec.encode(cell)).join('');
-                
-                jsContent += `        "${rowStr}"${ri < 17 ? ',' : ''}\n`;
-            });
-            jsContent += `    ]${i < keys.length-1 ? ',' : ''}\n`;
+            // 3. Append Render Function at the end
+            const renderFunc = `
+// Custom Tile: ${tile.name}
+RenderRegistry.register(${tile.id}, (ctx, tx, ty, x, y, map, def) => {
+    ${tile.code}
+});
+`;
+            content += renderFunc;
         });
-        jsContent += `};\n\n`;
 
-        // --- NEW: COMPATIBILITY INJECTION FOR INDEX.HTML ---
-        
-        // 1. Export Mappings (so index knows that 'A' = 101)
-        jsContent += `// --- EDITOR <-> INDEX SHARED MAPPINGS ---\n`;
-        jsContent += `if (typeof TILE_DATA_MAP !== 'undefined') {\n`;
-        const customMappings = Object.entries(IMPORT_MAP).filter(([k, v]) => k !== 'x' && k !== 'X'); // Skip defaults
-        if (customMappings.length > 0) {
-            jsContent += `    Object.assign(TILE_DATA_MAP, {\n`;
-            customMappings.forEach(([char, id]) => {
-                jsContent += `        '${char}': ${id},\n`;
-            });
-            jsContent += `    });\n`;
-        }
-        jsContent += `}\n\n`;
-
-        // 2. Export Definitions & Visuals
-        const customKeys = Object.keys(TILE_DEF).filter(k => TILE_DEF[k].customData);
-        if (customKeys.length > 0) {
-            jsContent += `// --- CUSTOM TILE ASSETS & DEFINITIONS ---\n`;
-            jsContent += `if (typeof TILE_DEF !== 'undefined') {\n`;
-            customKeys.forEach(k => {
-                const t = TILE_DEF[k];
-                // Note: We use ren: 100 (RENDER_STYLE.CUSTOM)
-                // We inject the base64 data directly into the definition
-                jsContent += `    TILE_DEF[${k}] = { name: "${t.name}", col: ${t.collisionId}, ren: 100, customSrc: "${t.customData}" };\n`;
-            });
-            jsContent += `}\n`;
-
-            jsContent += `\n// --- DYNAMIC RENDER LOGIC FOR CUSTOM TILES ---\n`;
-            jsContent += `if(typeof RenderRegistry !== 'undefined') {\n`;
-            jsContent += `  // Register Generic Handler for ID 100 (Custom)\n`;
-            jsContent += `  RenderRegistry.register(100, (ctx, tx, ty, x, y, map, def) => {\n`;
-            jsContent += `    if(!def.img) { def.img = new Image(); def.img.src = def.customSrc; }\n`;
-            jsContent += `    if(def.img.complete) ctx.drawImage(def.img, tx, ty, 16, 16);\n`;
-            jsContent += `    else { ctx.fillStyle = '#f0f'; ctx.fillRect(tx, ty, 16, 16); }\n`;
-            jsContent += `  });\n}\n`;
-        }
-        return jsContent;
+        this.download(content, 'tile.js');
+        document.getElementById('save-modal').style.display = 'none';
+        // Clear list so we don't double add if clicked again? 
+        // No, keep it in case user wants to save again. But maybe warn? 
+        // For this simple editor, we assume user saves once or overwrites.
     },
 
-    download(content) {
+    download(content, filename) {
         const blob = new Blob([content], { type: 'text/javascript' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'rooms.js';
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1482,7 +1411,6 @@ const dataManager = {
 
 pixelEditor.init();
 app.init();
-
 </script>
 </body>
 </html>

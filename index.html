@@ -903,7 +903,8 @@ class Game {
         this.renderer = new GameRenderer(document.getElementById('gameCanvas'), this.ui);
         this.scripts = new ScriptManager();
         this.map = new Map();
-        this.player = new Player(55, 150);
+        // this.player = new Player(55, 150);
+        this.player = new Player(-300, 150);
         this.particles = [];
         this.isDead = false;
         this.deathTimer = 0;
