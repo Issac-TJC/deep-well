@@ -875,7 +875,7 @@ class SystemManager {
     constructor(ui) {
         this.ui = ui;
         this.abilities = { 
-            minimap: true, 
+            minimap: false, 
             minerHat: false 
         };
         
@@ -904,7 +904,7 @@ class Game {
         this.scripts = new ScriptManager();
         this.map = new Map();
         // this.player = new Player(55, 150);
-        this.player = new Player(-730, 320);
+        this.player = new Player(-1200, 320);
         this.particles = [];
         this.isDead = false;
         this.deathTimer = 0;
