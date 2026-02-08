@@ -1,6 +1,6 @@
 const ROOM_LOOT = {
     "0,0": "minimap",
-    "1,3": "minerHat" // New Ability
+    "2,1": "minerHat" // New Ability
 };
 
 //通过刺死在刺上刷新房间来进行解密？
