@@ -30,6 +30,8 @@ const COLORS = {
     mapCurrent: '#aaffaa',
     mapWall: '#666688',   
     mapWater: '#4444ff',
+    mapClosed: '#e6d089',
+    mapTransparent: 'rgba(233, 243, 243, 0.76)',
     chestClosed: '#d4af37',
     chestOpen: '#8a6e26',
     ladder: '#444455',
@@ -39,7 +41,7 @@ const COLORS = {
     spikeDark: '#444455',
     woodDark: '#2a1e19',   
     woodLight: '#4e3b31',  
-    woodDetail: '#3a2a24'  
+    woodDetail: '#3a2a24',
 };
 
 function rand(min, max) { return Math.random() * (max - min) + min; }

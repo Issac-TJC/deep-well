@@ -287,8 +287,11 @@ class GameRenderer {
                                         const isSecretRevealed = map.secretRegistry[key] && map.secretRegistry[key].has(`${c},${r}`);
 
                                         if (def.col === COLLISION_TYPE.SOLID || def.isSecret) {
-                                            if (def.isSecret && isSecretRevealed) continue; 
-                                            this.ctx.fillStyle = COLORS.mapWall;
+                                            if (def.isSecret && isSecretRevealed) continue;
+                                            if (def.ren === RENDER_STYLE.DOOR_OPEN) continue;
+                                            if (def.ren === RENDER_STYLE.DOOR_CLOSED) this.ctx.fillStyle = COLORS.mapClosed;
+                                            else if (def.isTransparent) this.ctx.fillStyle = COLORS.mapTransparent;
+                                            else this.ctx.fillStyle = COLORS.mapWall;
                                         }
                                         else if (def.col === COLLISION_TYPE.LIQUID) this.ctx.fillStyle = COLORS.mapWater;
                                         else if (def.col === COLLISION_TYPE.CLIMBABLE) this.ctx.fillStyle = COLORS.ladder;
