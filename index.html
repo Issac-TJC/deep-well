@@ -7,76 +7,8 @@
 
     <link rel="stylesheet" href="scripts/boss/boss.css">
     <link rel="stylesheet" href="mobile/mobile.css">
+    <link rel="stylesheet" href="render/renderer.css">
 
-    <style>
-        body {
-            margin: 0;
-            background-color: #050505;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: #444;
-            font-family: 'Courier New', Courier, monospace;
-            touch-action: none; 
-        }
-
-        #game-container {
-            position: relative;
-            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
-            cursor: none; 
-        }
-
-        canvas {
-            display: block;
-            image-rendering: pixelated; 
-        }
-
-        #ui-layer {
-            position: absolute;
-            top: 20px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 14px;
-            pointer-events: none;
-            text-shadow: 0 2px 4px black;
-            opacity: 0;
-            transition: opacity 1s;
-            z-index: 20;
-        }
-
-        .scanlines {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(
-                to bottom,
-                rgba(255,255,255,0),
-                rgba(255,255,255,0) 50%,
-                rgba(0,0,0,0.1) 50%,
-                rgba(0,0,0,0.1)
-            );
-            background-size: 100% 4px;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        .vignette {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,20,0.9) 100%);
-            pointer-events: none;
-            z-index: 11;
-        }
-    </style>
 </head>
 <body>
 
@@ -105,7 +37,6 @@
 <script src="data/rooms.js"></script> 
 <script src="data/room_ability.js"></script>
 <script src="data/params.js"></script>
-<script src="data/events.js"></script>
 <script src="data/tile.js"></script>
 <script src="scripts/tileInteraction.js"></script>
 
