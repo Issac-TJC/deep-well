@@ -16,10 +16,14 @@
     pointer-events: auto;
 }
 
-#dpad {
+#joystick-base {
     left: 20px;
-    width: 150px;
-    height: 150px;
+    width: 140px;
+    height: 140px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    touch-action: none;
 }
 
 #actions {
@@ -48,11 +52,17 @@
     border-color: rgba(255, 255, 255, 0.8);
 }
 
-/* D-Pad Positioning */
-#btn-up { top: 0; left: 50px; width: 50px; height: 50px; }
-#btn-down { bottom: 0; left: 50px; width: 50px; height: 50px; }
-#btn-left { top: 50px; left: 0; width: 50px; height: 50px; }
-#btn-right { top: 50px; right: 0; width: 50px; height: 50px; }
+#joystick-knob {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
 
 /* Action Buttons Positioning */
 #btn-jump { 

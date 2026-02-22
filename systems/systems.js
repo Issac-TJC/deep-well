@@ -4,7 +4,8 @@ class InputHandler {
             ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
             w: false, s: false, a: false, d: false,
             Space: false, " ": false, Tab: false,
-            "=": false, "+": false, "-": false, "_": false
+            "=": false, "+": false, "-": false, "_": false,
+            e: false, E: false
         };
         this.initListeners();
     }
@@ -26,6 +27,7 @@ class InputHandler {
     get right() { return this.keys.ArrowRight || this.keys.d; }
     get jump() { return this.keys.Space || this.keys[" "]; }
     get map() { return this.keys.Tab; }
+    get interact() { return this.keys.e || this.keys.E; }
 }
 
 class UIManager {

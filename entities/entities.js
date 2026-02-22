@@ -89,7 +89,15 @@ class Chest {
         this.glowPhase += 0.1 * timeScale;
         const dist = Math.hypot(game.player.x - (this.x + this.w / 2), game.player.y - (this.y + this.h / 2));
         if (this.abilityId && game.system.abilities[this.abilityId]) this.opened = true;
-        if (dist < 15) this.open(game);
+        if (dist < 15) {
+            game.ui.showMessage("OPEN CHEST? [E]", "#ffff00", 100);
+            if (game.input.interact) {
+                game.input.keys['e'] = false;
+                game.input.keys['E'] = false;
+                this.open(game);
+                game.ui.showMessage("");
+            }
+        }
     }
     open(game) {
         this.opened = true;
