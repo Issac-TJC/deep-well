@@ -6,14 +6,14 @@
 
 class MapScript {
     // Interface required by the ScriptManager
-    init(game) {}   // Called once when entering the room
-    // update(game) {} // Called every frame while in room
+    init(game) { }   // Called once when entering the room
+    exit(game) { }   // Called once when exiting the room
 
-    update(game, timeScale) {}
+    update(game, timeScale) { }
 
     // Layer Hooks
-    drawBackground(ctx, game, timeScale) {} // NEW: Called by BackgroundLayer
-    drawForeground(ctx, game, timeScale) {} // Called by GameRenderer
+    drawBackground(ctx, game, timeScale) { } // NEW: Called by BackgroundLayer
+    drawForeground(ctx, game, timeScale) { } // Called by GameRenderer
 }
 
 class ScriptManager {
@@ -22,6 +22,10 @@ class ScriptManager {
     }
 
     onRoomEnter(game, roomX, roomY) {
+        if (this.currentScript && this.currentScript.exit) {
+            this.currentScript.exit(game);
+        }
+
         const key = `${roomX},${roomY}`;
         if (SCRIPT_REGISTRY[key]) {
             this.currentScript = SCRIPT_REGISTRY[key];
