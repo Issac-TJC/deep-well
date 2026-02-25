@@ -6,18 +6,33 @@
  */
 
 class BackgroundLayer {
-    constructor() {}
+    constructor() { }
     draw(ctx, game, timeScale) {
-        ctx.fillStyle = '#0d0d1a';
+        // Draw the WebGL background effect or static image directly onto the game canvas
+        if (game.bgEffect && game.bgEffect.active && game.bgEffect.canvas) {
+            ctx.drawImage(game.bgEffect.canvas, 0, 0, GAME_WIDTH, GAME_HEIGHT);
+        } else if (game.bgImage && game.bgImage.active && game.bgImage.loaded && game.bgImage.image) {
+            ctx.globalAlpha = game.bgImage.alpha;
+            ctx.drawImage(game.bgImage.image, 0, 0, GAME_WIDTH, GAME_HEIGHT);
+            ctx.globalAlpha = 1.0;
+        } else {
+            // Fallback if both plugins are missing/inactive
+            ctx.fillStyle = '#0b0b1a'; // Dark placeholder
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        }
+
+        // Render atmospheric parallax pillars
+        ctx.fillStyle = 'rgba(13, 13, 26, 0.4)'; // faint pillars
         ctx.fillRect(80, 0, 10, GAME_HEIGHT);
         ctx.fillRect(220, 0, 15, GAME_HEIGHT);
-        ctx.strokeStyle = '#1a1a2e';
+        ctx.strokeStyle = 'rgba(26, 26, 46, 0.5)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(100, 0); ctx.lineTo(100, 60);
         ctx.moveTo(110, 0); ctx.lineTo(110, 40);
         ctx.moveTo(250, 0); ctx.lineTo(250, 90);
         ctx.stroke();
+
         if (game.scripts.currentScript && game.scripts.currentScript.drawBackground) {
             game.scripts.currentScript.drawBackground(ctx, game, timeScale);
         }
@@ -44,8 +59,8 @@ class GameRenderer {
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         keys.forEach(k => {
             const [x, y] = k.split(',').map(Number);
-            if(x < minX) minX = x; if(x > maxX) maxX = x;
-            if(y < minY) minY = y; if(y > maxY) maxY = y;
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
         });
         return { minX, maxX, minY, maxY };
     }
@@ -56,10 +71,10 @@ class GameRenderer {
         const map = game.map;
 
         if (input.keys["Tab"]) {
-            if(!this.tabHeld) {
+            if (!this.tabHeld) {
                 if (system.abilities.minimap) {
                     this.showMap = !this.showMap;
-                    if(this.showMap) { 
+                    if (this.showMap) {
                         const b = this.worldBounds;
                         const gridW = (b.maxX - b.minX + 1); const gridH = (b.maxY - b.minY + 1);
                         const centerGridX = b.minX + (gridW - 1) / 2;
@@ -68,7 +83,7 @@ class GameRenderer {
                         const roomPixW = 30 * pixelSize; const roomPixH = 18 * pixelSize;
                         this.mapOffsetX = (centerGridX - map.roomX) * roomPixW;
                         this.mapOffsetY = (centerGridY - map.roomY) * roomPixH;
-                        this.clampMapCamera(); 
+                        this.clampMapCamera();
                     }
                 } else { events.emit('SYSTEM_MESSAGE', "MAP MODULE NOT FOUND"); }
                 this.tabHeld = true;
@@ -77,12 +92,12 @@ class GameRenderer {
 
         if (this.showMap) {
             const zoomSpeed = 0.05; const panSpeed = 3;
-            if(input.keys["="] || input.keys["+"]) this.mapScale = Math.min(this.mapScale + zoomSpeed, 5.0);
-            if(input.keys["-"] || input.keys["_"]) this.mapScale = Math.max(this.mapScale - zoomSpeed, 0.5); 
-            if(input.up) this.mapOffsetY += panSpeed;
-            if(input.down) this.mapOffsetY -= panSpeed;
-            if(input.left) this.mapOffsetX += panSpeed;
-            if(input.right) this.mapOffsetX -= panSpeed;
+            if (input.keys["="] || input.keys["+"]) this.mapScale = Math.min(this.mapScale + zoomSpeed, 5.0);
+            if (input.keys["-"] || input.keys["_"]) this.mapScale = Math.max(this.mapScale - zoomSpeed, 0.5);
+            if (input.up) this.mapOffsetY += panSpeed;
+            if (input.down) this.mapOffsetY -= panSpeed;
+            if (input.left) this.mapOffsetX += panSpeed;
+            if (input.right) this.mapOffsetX -= panSpeed;
             this.clampMapCamera();
         }
     }
@@ -92,7 +107,7 @@ class GameRenderer {
         const gridW = (b.maxX - b.minX + 1);
         const gridH = (b.maxY - b.minY + 1);
         const pixelSize = this.mapScale;
-        const roomPixW = 30 * pixelSize; 
+        const roomPixW = 30 * pixelSize;
         const roomPixH = 18 * pixelSize;
         const totalMapW = gridW * roomPixW;
         const totalMapH = gridH * roomPixH;
@@ -106,8 +121,8 @@ class GameRenderer {
 
     draw(game, accumulatedTime, timeScale) {
         this.ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-        this.ctx.fillStyle = COLORS.bg;
-        this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        // this.ctx.fillStyle = COLORS.bg;
+        // this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
         this.backgroundLayer.draw(this.ctx, game);
         this.drawFog(game.map);
@@ -116,17 +131,17 @@ class GameRenderer {
 
         game.player.draw(this.ctx, game);
         this.drawParticles(game);
-        this.drawLighting(game); 
+        this.drawLighting(game);
 
         if (game.scripts.currentScript && game.scripts.currentScript.drawForeground) {
             game.scripts.currentScript.drawForeground(this.ctx, game, timeScale);
         }
         this.drawPostEffects(game);
-        if(this.showMap) this.drawMinimap(game);
+        if (this.showMap) this.drawMinimap(game);
     }
 
     drawFog(map) {
-        this.ctx.fillStyle = COLORS.bg;
+        this.ctx.fillStyle = 'black'; // Make fog solid black to block out bg_effect where unexplored
         for (let y = 0; y < map.rows; y++) {
             for (let x = 0; x < map.cols; x++) {
                 if (!map.visible || !map.visible[y][x]) {
@@ -191,7 +206,7 @@ class GameRenderer {
             if (map.visible && map.visible[node.y][node.x]) {
                 let wx = node.x * TILE_SIZE;
                 let wy = node.y * TILE_SIZE + 4;
-                for(let i=0; i<=TILE_SIZE; i+=4) {
+                for (let i = 0; i <= TILE_SIZE; i += 4) {
                     let h = Math.sin(accumulatedTime * 0.005 + node.x + i * 0.2) * 2;
                     this.ctx.rect(wx + i, wy + h, 4, 2);
                 }
@@ -215,12 +230,12 @@ class GameRenderer {
         this.ctx.fillStyle = 'rgba(5, 5, 10, 0.3)';
         this.ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         this.ctx.globalCompositeOperation = 'lighter';
-        
+
         let g = this.ctx.createRadialGradient(game.player.x, game.player.y, 2, game.player.x, game.player.y, 40);
         g.addColorStop(0, 'rgba(100, 255, 150, 0.3)');
         g.addColorStop(1, 'rgba(0, 0, 0, 0)');
         this.ctx.fillStyle = g;
-        this.ctx.beginPath(); this.ctx.arc(game.player.x, game.player.y, 40, 0, Math.PI*2); this.ctx.fill();
+        this.ctx.beginPath(); this.ctx.arc(game.player.x, game.player.y, 40, 0, Math.PI * 2); this.ctx.fill();
 
         this.ctx.globalCompositeOperation = 'source-over';
     }
@@ -236,7 +251,7 @@ class GameRenderer {
         const mapX = (GAME_WIDTH - mapW) / 2;
         const mapY = (GAME_HEIGHT - mapH) / 2;
         this.ctx.fillRect(mapX, mapY, mapW, mapH);
-        
+
         this.ctx.save();
         this.ctx.beginPath();
         this.ctx.rect(mapX, mapY, mapW, mapH);
@@ -245,28 +260,28 @@ class GameRenderer {
         // this.ctx.fillStyle = COLORS.mapBg; // text color
         this.ctx.font = "10px monospace";
         this.ctx.textAlign = "center";
-        this.ctx.fillText(`SYSTEM MAP [+/- Zoom] [Arrows Pan]`, GAME_WIDTH/2, mapY + 15);
-        this.ctx.textAlign = "left"; 
+        this.ctx.fillText(`SYSTEM MAP [+/- Zoom] [Arrows Pan]`, GAME_WIDTH / 2, mapY + 15);
+        this.ctx.textAlign = "left";
 
-        const pixelSize = this.mapScale; 
+        const pixelSize = this.mapScale;
         const roomPixW = 30 * pixelSize; const roomPixH = 18 * pixelSize;
         const gridW = (b.maxX - b.minX + 1); const gridH = (b.maxY - b.minY + 1);
-        const viewCX = mapX + mapW/2; const viewCY = mapY + mapH/2;
+        const viewCX = mapX + mapW / 2; const viewCY = mapY + mapH / 2;
 
-        for(let rY = b.minY; rY <= b.maxY; rY++) {
-            for(let rX = b.minX; rX <= b.maxX; rX++) {
+        for (let rY = b.minY; rY <= b.maxY; rY++) {
+            for (let rX = b.minX; rX <= b.maxX; rX++) {
                 const key = `${rX},${rY}`;
-                const distX = rX - (b.minX + (gridW - 1)/2); 
-                const distY = rY - (b.minY + (gridH - 1)/2);
-                const dx = viewCX + this.mapOffsetX + distX * roomPixW - (roomPixW/2);
-                const dy = viewCY + this.mapOffsetY + distY * roomPixH - (roomPixH/2);
+                const distX = rX - (b.minX + (gridW - 1) / 2);
+                const distY = rY - (b.minY + (gridH - 1) / 2);
+                const dx = viewCX + this.mapOffsetX + distX * roomPixW - (roomPixW / 2);
+                const dy = viewCY + this.mapOffsetY + distY * roomPixH - (roomPixH / 2);
 
                 if (dx + roomPixW < mapX || dx > mapX + mapW || dy + roomPixH < mapY || dy > mapY + mapH) continue;
 
                 if (map.explored[key]) {
                     const layout = WORLD_LAYOUTS[key];
                     const exploredData = map.explored[key];
-                    
+
                     // MODIFIED: Use the visible blue color for ALL explored rooms, not just (0,0)
                     // This ensures empty explored space is visible everywhere.
                     // const baseColor = '#222233'; // light for explored rooms
@@ -274,8 +289,8 @@ class GameRenderer {
                     const baseColor = COLORS.mapBg; // dark lighter than mapBg
 
                     if (layout) {
-                        for (let r = 0; r < layout.length; r++) {     
-                            for (let c = 0; c < layout[r].length; c++) { 
+                        for (let r = 0; r < layout.length; r++) {
+                            for (let c = 0; c < layout[r].length; c++) {
                                 if (exploredData[r][c]) {
                                     // Draw background for this specific visible tile (handles empty space)
                                     this.ctx.fillStyle = baseColor;
@@ -297,8 +312,8 @@ class GameRenderer {
                                         else if (def.col === COLLISION_TYPE.CLIMBABLE) this.ctx.fillStyle = COLORS.ladder;
                                         else if (def.col === COLLISION_TYPE.ONE_WAY) this.ctx.fillStyle = COLORS.woodDark;
                                         else if (def.col === COLLISION_TYPE.HAZARD) {
-                                            if (map.isSpikeDestroyedAt(rX, rY, c, r)) continue; 
-                                            this.ctx.fillStyle = "#ff0000"; 
+                                            if (map.isSpikeDestroyedAt(rX, rY, c, r)) continue;
+                                            this.ctx.fillStyle = "#ff0000";
                                         }
                                         else if (def.ren === RENDER_STYLE.OBJECT_MARKER) {
                                             if (tile === 3) this.ctx.fillStyle = COLORS.chestClosed;
@@ -320,7 +335,7 @@ class GameRenderer {
                         this.ctx.fillStyle = '#fff';
                         this.ctx.fillRect(dx + px, dy + py, 2, 2);
                     }
-                } 
+                }
             }
         }
         this.ctx.restore();

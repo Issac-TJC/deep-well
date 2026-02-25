@@ -7,7 +7,12 @@ class Game {
         this.renderer = new GameRenderer(document.getElementById('gameCanvas'), this.ui);
         this.scripts = new ScriptManager();
         this.map = new Map();
-        // this.player = new Player(55, 150);
+        this.bgEffect = new BackgroundEffectPlugin(true);
+        this.bgEffect.init();
+
+        // Background Image Plugin API
+        this.bgImage = new BackgroundImagePlugin();
+
         this.player = new Player(-1200, 500);
         this.particles = [];
         this.isDead = false;
@@ -88,4 +93,5 @@ class Game {
 
 // Start Game
 const game = new Game();
+game.bgImage.setImage('data/imgs/bg.png');
 requestAnimationFrame((t) => game.loop(t));
