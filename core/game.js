@@ -93,5 +93,5 @@ class Game {
 
 // Start Game
 const game = new Game();
-game.bgImage.setImage('data/imgs/bg.png');
+game.bgImage.setImage('data/imgs/bg1.png');
 requestAnimationFrame((t) => game.loop(t));

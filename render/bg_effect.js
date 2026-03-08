@@ -150,21 +150,21 @@ class BackgroundEffectPlugin {
             return smoothstep(0.3, 0.7, n);
         }
 
-        float particles(vec2 uv) {
-            vec2 p = uv * 10.0;
-            p.y += (u_time * u_timeScale) * 0.5;
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            vec3 h = hash3(i);
+        // float particles(vec2 uv) {
+        //     vec2 p = uv * 10.0;
+        //     p.y += (u_time * u_timeScale) * 0.5;
+        //     vec2 i = floor(p);
+        //     vec2 f = fract(p);
+        //     vec3 h = hash3(i);
             
-            float dist = distance(f, h.xy);
-            float particle = smoothstep(h.z * 0.1, 0.0, dist);
+        //     float dist = distance(f, h.xy);
+        //     float particle = smoothstep(h.z * 0.1, 0.0, dist);
             
-            particle *= smoothstep(0.0, 0.1, h.x) * smoothstep(1.0, 0.9, h.x);
-            particle *= h.y;
+        //     particle *= smoothstep(0.0, 0.1, h.x) * smoothstep(1.0, 0.9, h.x);
+        //     particle *= h.y;
             
-            return particle;
-        }
+        //     return particle;
+        // }
 
         vec3 render(vec2 uv, vec2 screen_uv) {
             vec3 bgColor = vec3(0.02, 0.02, 0.04);
@@ -173,9 +173,9 @@ class BackgroundEffectPlugin {
             float s = smoke(uv);
             vec3 finalColor = mix(bgColor, smokeColor, s);
             
-            float p = particles(uv);
-            vec3 particleColor = vec3(0.3, 0.7, 0.9);
-            finalColor += p * particleColor * 0.8;
+            // float p = particles(uv);
+            // vec3 particleColor = vec3(0.3, 0.7, 0.9);
+            // finalColor += p * particleColor * 0.8;
             
             return finalColor;
         }
@@ -201,7 +201,7 @@ class BackgroundEffectPlugin {
 
             float scanline = sin(v_uv.y * u_resolution.y * 3.14159 * 0.5);
             scanline = scanline * 0.5 + 0.5;
-            color *= mix(1.0, 0.85 + 0.15 * scanline, 0.3);
+            color *= mix(1.0, 0.55 + 0.15 * scanline, 0.3);
 
             float vignette = smoothstep(1.5, 0.3, distFromCenter);
             color *= vignette;
