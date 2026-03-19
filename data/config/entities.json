@@ -1,0 +1,17 @@
+{
+    "3": {
+        "type": "Chest"
+    },
+    "5": {
+        "type": "WallLight"
+    },
+    "1": {
+        "type": "Vegetation"
+    },
+    "10": {
+        "type": "Vegetation"
+    },
+    "2": {
+        "type": "WaterNode"
+    }
+}

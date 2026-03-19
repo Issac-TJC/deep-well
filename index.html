@@ -20,6 +20,17 @@
         <div class="scanlines"></div>
         <div class="vignette"></div>
 
+        <!-- Save/Load UI -->
+        <div id="save-load-ui" style="position: absolute; top: 10px; right: 10px; z-index: 1000;">
+            <button id="btn-save"
+                style="background:rgba(0,0,0,0.5); color:#fff; border:1px solid #777; padding:5px 10px; cursor:pointer; font-family: monospace;">Save
+                JSON</button>
+            <label for="btn-load"
+                style="background:rgba(0,0,0,0.5); color:#fff; border:1px solid #777; padding:5px 10px; cursor:pointer; margin-left:5px; font-family: monospace;">Load
+                JSON</label>
+            <input type="file" id="btn-load" accept=".json" style="display:none;">
+        </div>
+
         <!-- Mobile Controls UI -->
         <div id="mobile-controls">
             <div id="joystick-base" class="control-group">
@@ -33,12 +44,13 @@
         </div>
     </div>
 
-    <!-- Room Design -->
-    <script src="world/world_data/rooms.js"></script>
-    <script src="world/world_data/room_ability.js"></script>
+    <!-- Data & Managers -->
+    <script src="core/events.js"></script>
+    <script src="core/dataManager.js"></script>
+    <script src="core/saveManager.js"></script>
     <script src="world/world_data/params.js"></script>
-    <script src="world/world_data/tile.js"></script>
-    <script src="world/tileInteraction.js"></script>
+    <script src="world/world_data/tile.js"></script> <!-- Rendering specifics -->
+    <script src="world/tileInteraction.js"></script> <!-- Registration logic -->
 
     <!-- Rendering Engine Scripts -->
     <script src="render/renderer.js"></script>

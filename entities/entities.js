@@ -197,12 +197,15 @@ function spawnVegetation(map, x, y) {
     }
 }
 
-const ENTITY_FACTORY = {
-    3: (map, x, y, roomKey) => map.entities.push(new Chest(x * TILE_SIZE, y * TILE_SIZE, roomKey)),
-    5: (map, x, y) => map.entities.push(new WallLight(x * TILE_SIZE, y * TILE_SIZE)),
-    1: (map, x, y) => spawnVegetation(map, x, y),
-    10: (map, x, y) => spawnVegetation(map, x, y),
-    2: (map, x, y) => {
+function spawnEntityFromConfig(map, x, y, roomKey, id) {
+    if (!window.GameData || !window.GameData.entities) return;
+    const config = window.GameData.entities[id];
+    if (!config) return;
+
+    if (config.type === "Chest") map.entities.push(new Chest(x * TILE_SIZE, y * TILE_SIZE, roomKey));
+    else if (config.type === "WallLight") map.entities.push(new WallLight(x * TILE_SIZE, y * TILE_SIZE));
+    else if (config.type === "Vegetation") spawnVegetation(map, x, y);
+    else if (config.type === "WaterNode") {
         if (map.getTile(x, y - 1) === 0) map.waterNodes.push({ x: x, y: y });
     }
-};
+}

@@ -1,0 +1,117 @@
+{
+  "COLLISION_TYPE": {
+    "NONE": 0,
+    "SOLID": 1,
+    "ONE_WAY": 2,
+    "LIQUID": 3,
+    "CLIMBABLE": 4,
+    "HAZARD": 5
+  },
+  "RENDER_STYLE": {
+    "INVISIBLE": 0,
+    "BLOCK_BASIC": 1,
+    "LIQUID": 2,
+    "LADDER": 3,
+    "PLATFORM_WOOD": 4,
+    "SPIKE_ROCK": 5,
+    "OBJECT_MARKER": 6,
+    "GLASS": 8,
+    "DOOR_CLOSED": 9,
+    "DOOR_OPEN": 10
+  },
+  "TILE_DATA_MAP": {
+    "0": 0,
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6,
+    "8": 8,
+    "10": 10,
+    "g": 20,
+    "D": 21,
+    "d": 22,
+    "x": 99
+  },
+  "TILE_DEF": {
+    "0": {
+      "name": "Air",
+      "col": 0,
+      "ren": 0,
+      "isVoid": true
+    },
+    "1": {
+      "name": "Dirt",
+      "col": 1,
+      "ren": 1
+    },
+    "2": {
+      "name": "Water",
+      "col": 3,
+      "ren": 2,
+      "friction": 0.9,
+      "gravityMod": 0.5,
+      "isVoid": true
+    },
+    "3": {
+      "name": "ChestNode",
+      "col": 0,
+      "ren": 6,
+      "isVoid": true
+    },
+    "4": {
+      "name": "Ladder",
+      "col": 4,
+      "ren": 3,
+      "isVoid": true
+    },
+    "5": {
+      "name": "LightNode",
+      "col": 0,
+      "ren": 6,
+      "isVoid": true
+    },
+    "6": {
+      "name": "SecretWall",
+      "col": 0,
+      "ren": 1,
+      "isSecret": true
+    },
+    "8": {
+      "name": "WoodPlatform",
+      "col": 2,
+      "ren": 4,
+      "isVoid": true
+    },
+    "10": {
+      "name": "DirtAlt",
+      "col": 1,
+      "ren": 1
+    },
+    "20": {
+      "name": "Glass",
+      "col": 1,
+      "ren": 8,
+      "isTransparent": true,
+      "noBounce": true
+    },
+    "21": {
+      "name": "DoorClosed",
+      "col": 1,
+      "ren": 9
+    },
+    "22": {
+      "name": "DoorOpen",
+      "col": 0,
+      "ren": 10
+    },
+    "99": {
+      "name": "Spike",
+      "col": 5,
+      "ren": 5,
+      "damage": 100,
+      "isVoid": true
+    }
+  }
+}
