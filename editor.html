@@ -12,22 +12,19 @@
     <!-- HIDDEN FILE INPUTS -->
     <input type="file" id="file-loader" accept=".js,.json,.txt" style="display: none;"
         onchange="dataManager.onFileSelected(this)">
-    <input type="file" id="tile-js-loader" accept=".js" style="display: none;"
-        onchange="dataManager.onTileJsSelected(this)">
+    <input type="file" id="tile-json-loader" accept=".json" style="display: none;"
+        onchange="dataManager.onTileJsonSelected(this)">
 
-    <!-- SAVE MODAL -->
-    <div id="save-modal">
-        <div class="modal-box">
-            <h3>Save Options</h3>
-            <p style="font-size: 11px; color: #aaa; margin-bottom: 20px;">Choose file type to save.</p>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button class="active" onclick="dataManager.saveMap()">SAVE MAP (rooms.js)</button>
-                <button class="success" onclick="dataManager.savePatchedTileJs()">SAVE PATCHED tile.js</button>
-                <button class="secondary"
-                    onclick="document.getElementById('save-modal').style.display='none'">CANCEL</button>
-            </div>
+    <!-- MODALS -->
+    <div id="save-modal" class="modal">
+        <div class="modal-content">
+            <h3>Download Files</h3>
+            <button class="success" onclick="dataManager.saveMap()">Download rooms.json</button>
+            <button class="primary" onclick="dataManager.savePatchedTileJson()">Download tiles.json (+
+                custom_tiles.js)</button>
+            <button class="danger" onclick="document.getElementById('save-modal').style.display='none'">Close</button>
             <div id="tile-js-status" style="font-size: 10px; color: #ffaa00; margin-top: 10px; display:none;">
-                Warning: Original tile.js not loaded. Cannot patch.
+                Warning: Original tiles.json not loaded. Cannot patch.
             </div>
         </div>
     </div>
@@ -88,9 +85,13 @@
         <div class="group">
             <h3>File / Data</h3>
             <div class="row">
-                <button class="active" onclick="dataManager.openSmart()" title="Load rooms.js">OPEN MAP</button>
-                <button onclick="document.getElementById('tile-js-loader').click()"
-                    title="Load tile.js to enable patching">LOAD TILE.JS</button>
+                <button class="active" onclick="dataManager.openSmart()" title="Load rooms.js/json">OPEN MAP
+                    (JSON)</button>
+                <button onclick="dataManager.openImport()" title="Paste String">PASTE...</button>
+            </div>
+            <div class="row">
+                <button onclick="document.getElementById('tile-json-loader').click()"
+                    title="Load tiles.json to patch">LOAD TILES.JSON</button>
             </div>
             <div class="row">
                 <button class="success" onclick="dataManager.saveWithUI()">SAVE...</button>
@@ -176,7 +177,7 @@
                     </div>
                     <div class="helper-text"
                         style="text-align: left; margin-top: 10px; border-top: 1px solid #444; padding-top: 5px;">
-                        Saves locally. Load <b>tile.js</b> to patch definitions and code into it on save.
+                        Saves locally. Load <b>tiles.json</b> to patch definitions and output code on save.
                     </div>
                     <div style="margin-top: auto; display: flex; gap: 5px;">
                         <button class="secondary" onclick="pixelEditor.close()">Cancel</button>

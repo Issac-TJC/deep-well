@@ -49,7 +49,7 @@ class Physics {
         const gravity = 0.25;
         const centerTileDef = getTileDef(map.getTile(Math.floor(entity.x / TILE_SIZE), Math.floor((entity.y + entity.r * 0.7) / TILE_SIZE)));
         const inWater = (centerTileDef.col === COLLISION_TYPE.LIQUID);
-        
+
         const ladderDef = getTileDef(map.getTile(Math.floor(entity.x / TILE_SIZE), Math.floor(entity.y / TILE_SIZE)));
         const touchingLadder = (ladderDef.col === COLLISION_TYPE.CLIMBABLE);
 
@@ -71,9 +71,9 @@ class Physics {
             if (input.down) { entity.vy = 1.5; climbed = true; }
             if (climbed && typeof entity.onClimb === 'function') entity.onClimb(game, timeScale);
             if (input.jump) {
-                if (!entity.jumpHeld) { 
+                if (!entity.jumpHeld) {
                     if (typeof entity.onJump === 'function') entity.onJump(game, -4.5);
-                    entity.onLadder = false; 
+                    entity.onLadder = false;
                 }
             } else entity.jumpHeld = false;
         }
@@ -99,7 +99,7 @@ class Physics {
         else {
             entity.onLadder = false; entity.floatTimer = 0;
             if (input.jump) {
-                if (!entity.jumpHeld && entity.grounded) { 
+                if (!entity.jumpHeld && entity.grounded) {
                     if (typeof entity.onJump === 'function') entity.onJump(game, -4.5);
                 }
             } else entity.jumpHeld = false;
@@ -124,7 +124,7 @@ class Physics {
         if (typeof entity.onWaterTransition === 'function') {
             entity.onWaterTransition(game, inWater);
         }
-        
+
         return { inWater, touchingLadder };
     }
 

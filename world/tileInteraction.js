@@ -76,76 +76,51 @@ const TileInteractions = (function () {
                     }
                 }
             }
+        },
+        /**
+         * Load interactions dynamically from JSON config
+         */
+        registerFromData: function (interactionsData) {
+            for (let id in interactionsData) {
+                const config = interactionsData[id];
+                if (config.type === "door") {
+                    this.register(parseInt(id), {
+                        distance: config.distance || 24,
+                        onNear: function (game, map, x, y, timeScale) {
+                            if (game.system.keys >= config.requirements.keys) {
+                                return true;
+                            } else {
+                                if (Math.random() < 0.05) {
+                                    game.ui.showMessage(config.messages.locked.text, config.messages.locked.color, 500);
+                                }
+                                return false;
+                            }
+                        },
+                        onActive: function (game, map, x, y, timeScale) {
+                            game.ui.showMessage(config.messages.active.text, config.messages.active.color, 0);
+
+                            if (game.input.interact) {
+                                if (game.system.keys >= config.requirements.keys) {
+                                    game.system.keys -= config.effects.consumeKey;
+                                    map.setTile(x, y, config.effects.changeTile);
+                                    if (config.effects.clearTop) map.setTile(x, y - 1, 0);
+                                    game.ui.showMessage(config.messages.opened.text, config.messages.opened.color, 1000);
+                                    return true;
+                                } else {
+                                    game.ui.showMessage(config.messages.notEnough.text, config.messages.notEnough.color, 1000);
+                                    return true;
+                                }
+                            }
+
+                            if (game.input.left || game.input.right || game.input.up || game.input.down) {
+                                return true;
+                            }
+                            return false;
+                        }
+                    });
+                }
+            }
         }
     };
 })();
 
-/**
- * ============================================================================
- * 注册具体逻辑：门 (DOOR)
- * ============================================================================
- */
-/**
- * ============================================================================
- * 注册具体逻辑：门 (DOOR) - ID: 21
- * ============================================================================
- */
-TileInteractions.register(21, {
-    distance: 24, // 触发距离
-
-    // 1. 靠近时的逻辑
-    onNear: function (game, map, x, y, timeScale) {
-        // 只有当玩家有钥匙时，才激活交互会话
-        if (game.system.keys > 0) {
-            return true; // 进入 onActive
-        } else {
-            // 没钥匙，仅提示
-            if (Math.random() < 0.05) {
-                game.ui.showMessage("LOCKED - NEED KEY", "#ff5555", 500);
-            }
-            return false;
-        }
-    },
-
-    // 2. 激活状态下的逻辑 (等待按键确认)
-    onActive: function (game, map, x, y, timeScale) {
-        game.ui.showMessage("OPEN WITH KEY? [E]", "#ffff00", 0);
-
-        // 确认开门 (假设 e/E 对应 interact)
-        if (game.input.interact) {
-            if (game.system.keys > 0) {
-                // --- 核心逻辑 ---
-
-                // 1. 消耗钥匙
-                game.system.keys--;
-
-                // 2. 修改底部 (当前格子): 21(关) -> 22(开)
-                // 渲染器会自动处理 ID 22，画出一个开着的门框
-                map.setTile(x, y, 22);
-
-                // 3. 修改顶部 (上方格子): 1(墙) -> 0(空气)
-                // 物理层面上，原本挡住头的墙现在消失了，玩家可以通过
-                map.setTile(x, y - 1, 0);
-
-                // ----------------
-
-                game.ui.showMessage("OPENED", "#aaffaa", 1000);
-
-                // 播放开门音效 (如果你的引擎支持)
-                // game.audio.play('door_open');
-
-                return true; // 交互结束
-            } else {
-                game.ui.showMessage("NO KEY!", "#ff5555", 1000);
-                return true;
-            }
-        }
-
-        // 玩家移动则取消交互
-        if (game.input.left || game.input.right || game.input.up || game.input.down) {
-            return true;
-        }
-
-        return false; // 继续等待输入
-    }
-});

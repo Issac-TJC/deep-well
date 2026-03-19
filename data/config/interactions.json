@@ -1,0 +1,32 @@
+{
+    "21": {
+        "type": "door",
+        "distance": 24,
+        "requirements": {
+            "keys": 1
+        },
+        "messages": {
+            "locked": {
+                "text": "LOCKED - NEED KEY",
+                "color": "#ff5555"
+            },
+            "active": {
+                "text": "OPEN WITH KEY? [E]",
+                "color": "#ffff00"
+            },
+            "opened": {
+                "text": "OPENED",
+                "color": "#aaffaa"
+            },
+            "notEnough": {
+                "text": "NO KEY!",
+                "color": "#ff5555"
+            }
+        },
+        "effects": {
+            "consumeKey": 1,
+            "changeTile": 22,
+            "clearTop": true
+        }
+    }
+}

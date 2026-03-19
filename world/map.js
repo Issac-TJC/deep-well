@@ -42,7 +42,9 @@ class Map {
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
                 let t = getTileValue(this.layout[y][x]);
-                if (ENTITY_FACTORY[t]) ENTITY_FACTORY[t](this, x, y, roomKey);
+                if (typeof spawnEntityFromConfig === 'function') {
+                    spawnEntityFromConfig(this, x, y, roomKey, t);
+                }
             }
         }
     }
